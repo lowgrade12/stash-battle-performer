@@ -1,3 +1,5 @@
+<img width="1696" height="1135" alt="image" src="https://github.com/user-attachments/assets/4983d20c-2141-4000-afd5-cc1a669d4ddd" />
+
 # ⚔️ Stash Battle
 
 A head-to-head scene comparison plugin for [Stash](https://stashapp.cc/) that uses an ELO-style rating system to help you rank your scenes.
@@ -14,6 +16,10 @@ Stash Battle presents you with two scenes side-by-side and asks you to pick the 
   - **Champion** 🏆 – Winner stays on. The winning scene keeps battling until it's dethroned.
 
 ## Installation
+
+⚠️ Install at your own risk, nearly entirely vibe coded for myself using Claude, I have barely reviewed the code at all.
+
+Recommend saving a backup of your database beforehand (Settings → Interface → Editing)
 
 ### Source Index: 
 
