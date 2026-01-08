@@ -1,5 +1,7 @@
 <img width="1696" height="1135" alt="image" src="https://github.com/user-attachments/assets/4983d20c-2141-4000-afd5-cc1a669d4ddd" />
 
+NSFW Demo Video on the Stash forum post: https://discourse.stashapp.cc/t/stash-battle/5180
+
 # ⚔️ Stash Battle
 
 A head-to-head scene comparison plugin for [Stash](https://stashapp.cc/) that uses an ELO-style rating system to help you rank your scenes.
