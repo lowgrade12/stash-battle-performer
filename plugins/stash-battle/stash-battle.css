@@ -674,3 +674,102 @@
   padding: 12px 30px;
   font-size: 1.1rem;
 }
+
+
+/* ===== Performer -> Scene compatibility shim (feat/performer-mode) =====
+   Makes the new .pwr-performer-* elements look like the existing
+   .pwr-scene-* rules without having to duplicate the whole stylesheet.
+   This is intentionally minimal and conservative. */
+.pwr-performer-card,
+.pwr-performer-image-container,
+.pwr-performer-image,
+.pwr-performer-duration,
+.pwr-performer-body,
+.pwr-performer-info,
+.pwr-performer-title-row,
+.pwr-performer-title,
+.pwr-performer-meta,
+.pwr-performer-rank,
+.pwr-performer-image .pwr-no-image {
+  /* Base defaults so missing scene rules don't break layout */
+  box-sizing: border-box;
+}
+
+/* Useful, lightweight visual defaults if the scene stylesheet doesn't cover an element */
+.pwr-performer-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--pwr-card-bg, #fff);
+  box-shadow: var(--pwr-card-shadow, 0 2px 8px rgba(0,0,0,0.06));
+}
+
+.pwr-performer-image-container {
+  position: relative;
+  overflow: hidden;
+  background: var(--pwr-image-bg, #f6f6f6);
+}
+
+.pwr-performer-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+.pwr-performer-duration {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  font-size: 12px;
+  color: #fff;
+  background: rgba(0,0,0,0.55);
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+
+.pwr-performer-body {
+  padding: 12px;
+  display: block;
+}
+
+.pwr-performer-title {
+  margin: 0 0 6px 0;
+  font-size: 1rem;
+  line-height: 1.2;
+  color: var(--pwr-title-color, #111);
+}
+
+.pwr-performer-meta .pwr-meta-item {
+  margin-bottom: 4px;
+  font-size: 0.85rem;
+  color: var(--pwr-meta-color, #555);
+}
+
+.pwr-performer-rank {
+  font-weight: 700;
+  color: var(--pwr-rank-color, #333);
+  margin-left: 8px;
+}
+
+/* Streak & choose button */
+.pwr-streak-badge { position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.6); color: #fff; padding: 4px 8px; border-radius: 12px; font-size: 12px; }
+.pwr-choose-btn { margin-top: 8px; padding: 8px 10px; background: var(--pwr-btn-bg, #0d6efd); color: #fff; border-radius: 6px; text-align: center; cursor: pointer; }
+
+/* If JS already added paired pwr-scene-* classes, let those rules take precedence.
+   Keeping empty grouped selectors below ensures future scene rules that use
+   multiple selectors (e.g. ".pwr-scene-card .pwr-scene-title") will also apply
+   when a performer class is present alongside the scene class. */
+.pwr-performer-card.pwr-scene-card,
+.pwr-performer-image-container.pwr-scene-image-container,
+.pwr-performer-image.pwr-scene-image,
+.pwr-performer-duration.pwr-scene-duration,
+.pwr-performer-body.pwr-scene-body,
+.pwr-performer-info.pwr-scene-info,
+.pwr-performer-title-row.pwr-scene-title-row,
+.pwr-performer-title.pwr-scene-title,
+.pwr-performer-meta.pwr-scene-meta,
+.pwr-performer-rank.pwr-scene-rank {}
+
+/* End shim */
