@@ -11,7 +11,7 @@
   let gauntletDefeated = []; // IDs of performers defeated in current run
   let gauntletFalling = false; // True when champion lost and is finding their floor
   let gauntletFallingScene = null; // The performer that's falling to find its position
-  let totalScenesCount = 0; // Total performers for position display
+  let totalPerformersCount = 0; // Total performers for position display
   let disableChoice = false; // Track when inputs should be disabled to prevent multiple events 
 
   // ============================================
@@ -56,7 +56,7 @@
     return countResult.findPerformers.count;
   }
 
-async function fetchRandomPerformers(count = 2) {
+ async function fetchRandomPerformers(count = 2) {
   const totalPerformers = await fetchPerformerCount(); // Updated variable name
   if (totalPerformers < 2) {
     throw new Error("Not enough performers for comparison. You need at least 2 performers.");
@@ -158,11 +158,11 @@ async function fetchRandomPerformers(count = 2) {
   // Gauntlet mode: champion vs next challenger
   async function fetchGauntletPair() {
     const performersQuery = `
-      query FindScenesByRating($filter: FindFilterType) {
-        findScenes(filter: $filter) {
+      query FindPerformersByRating($filter: FindFilterType) {
+        findPerformers(filter: $filter) {
           count
           performers {
-            ${SCENE_FRAGMENT}
+            ${PERFORMER_FRAGMENT}
           }
         }
       }
@@ -177,11 +177,11 @@ async function fetchRandomPerformers(count = 2) {
       }
     });
 
-    const performers = result.findScenes.performers || [];
-    totalScenesCount = result.findScenes.count || performers.length;
+    const performers = result.findPerformers.performers || [];
+    totalPerformersCount = result.findPerformers.count || performers.length;
     
     if (performers.length < 2) {
-      return { performers: await fetchRandomScenes(2), ranks: [null, null], isVictory: false, isFalling: false };
+      return { performers: await fetchRandomPerformers(2), ranks: [null, null], isVictory: false, isFalling: false };
     }
 
     // Handle falling mode - find next opponent BELOW to test against
@@ -199,7 +199,7 @@ async function fetchRandomPerformers(count = 2) {
         // Hit the bottom - they're the lowest, place them here
         const finalRank = performers.length;
         const finalRating = 1; // Lowest rating
-        updateSceneRating(gauntletFallingScene.id, finalRating);
+        updatePerformerRating(gauntletFallingScene.id, finalRating);
         
         return {
           performers: [gauntletFallingScene],
@@ -296,11 +296,11 @@ async function fetchRandomPerformers(count = 2) {
   // Champion mode: like gauntlet but winner stays on (no falling)
   async function fetchChampionPair() {
     const performersQuery = `
-      query FindScenesByRating($filter: FindFilterType) {
-        findScenes(filter: $filter) {
+      query FindPerformersByRating($filter: FindFilterType) {
+        findPerformers(filter: $filter) {
           count
           performers {
-            ${SCENE_FRAGMENT}
+            ${PERFORMER_FRAGMENT}
           }
         }
       }
@@ -315,11 +315,11 @@ async function fetchRandomPerformers(count = 2) {
       }
     });
 
-    const performers = result.findScenes.performers || [];
-    totalScenesCount = result.findScenes.count || performers.length;
+    const performers = result.findPerformers.performers || [];
+    totalPerformersCount = result.findPerformers.count || performers.length;
     
     if (performers.length < 2) {
-      return { performers: await fetchRandomScenes(2), ranks: [null, null], isVictory: false };
+      return { performers: await fetchRandomPerformers(2), ranks: [null, null], isVictory: false };
     }
 
     // If no champion yet, start with a random challenger vs the lowest rated performer
@@ -387,7 +387,7 @@ async function fetchRandomPerformers(count = 2) {
       title = pathParts[pathParts.length - 1].replace(/\.[^/.]+$/, "");
     }
     if (!title) {
-      title = `Scene #${champion.id}`;
+      title = `Performer #${champion.id}`;
     }
     
     const screenshotPath = champion.paths ? champion.paths.screenshot : null;
@@ -403,7 +403,7 @@ async function fetchRandomPerformers(count = 2) {
           }
         </div>
         <h3 class="pwr-victory-name">${title}</h3>
-        <p class="pwr-victory-stats">Conquered all ${totalScenesCount} performers with a ${gauntletWins} win streak!</p>
+        <p class="pwr-victory-stats">Conquered all ${totalPerformersCount} performers with a ${gauntletWins} win streak!</p>
         <button id="pwr-new-gauntlet" class="btn btn-primary">Start New Gauntlet</button>
       </div>
     `;
@@ -420,7 +420,7 @@ async function fetchRandomPerformers(count = 2) {
       title = pathParts[pathParts.length - 1].replace(/\.[^/.]+$/, "");
     }
     if (!title) {
-      title = `Scene #${performer.id}`;
+      title = `Performer #${performer.id}`;
     }
     
     const screenshotPath = performer.paths ? performer.paths.screenshot : null;
@@ -437,7 +437,7 @@ async function fetchRandomPerformers(count = 2) {
         </div>
         <h3 class="pwr-victory-name">${title}</h3>
         <p class="pwr-victory-stats">
-          Rank <strong>#${rank}</strong> of ${totalScenesCount}<br>
+          Rank <strong>#${rank}</strong> of ${totalPerformersCount}<br>
           Rating: <strong>${finalRating}/100</strong>
         </p>
         <button id="pwr-new-gauntlet" class="btn btn-primary">Start New Run</button>
@@ -468,23 +468,23 @@ async function fetchRandomPerformers(count = 2) {
   }
   
   // Update performer rating in Stash database
-async function updatePerformerRating(performerId, newRating) {
-  const mutation = `
-    mutation PerformerUpdate($input: PerformerUpdateInput!) {
-      performerUpdate(input: $input) {
-        id
-        rating100
-      }
-    }
-  `;
-
-  return await graphqlQuery(mutation, {
-    input: {
-      id: performerId,
-      rating100: Math.round(newRating)
-    }
-  });
-}
+ async function updatePerformerRating(performerId, newRating) {
+   const mutation = `
+     mutation PerformerUpdate($input: PerformerUpdateInput!) {
+       performerUpdate(input: $input) {
+         id
+         rating100
+       }
+     }
+   `;
+ 
+   return await graphqlQuery(mutation, {
+     input: {
+       id: performerId,
+       rating100: Math.round(newRating)
+     }
+   });
+ }
 
   // ============================================
   // RATING LOGIC
@@ -538,8 +538,8 @@ async function updatePerformerRating(performerId, newRating) {
     const loserChange = newLoserRating - loserRating;
     
     // Update performers in Stash (only if changed)
-    if (winnerChange !== 0) updateSceneRating(winnerId, newWinnerRating);
-    if (loserChange !== 0) updateSceneRating(loserId, newLoserRating);
+    if (winnerChange !== 0) updatePerformerRating(winnerId, newWinnerRating);
+    if (loserChange !== 0) updatePerformerRating(loserId, newLoserRating);
     
     return { newWinnerRating, newLoserRating, winnerChange, loserChange };
   }
@@ -548,7 +548,7 @@ async function updatePerformerRating(performerId, newRating) {
   function finalizeGauntletLoss(championId, winnerRating) {
     // Set champion rating to just below the performer that beat them
     const newRating = Math.max(1, winnerRating - 1);
-    updateSceneRating(championId, newRating);
+    updatePerformerRating(championId, newRating);
     return newRating;
   }
 
@@ -583,7 +583,7 @@ async function updatePerformerRating(performerId, newRating) {
       title = pathParts[pathParts.length - 1].replace(/\.[^/.]+$/, "");
     }
     if (!title) {
-      title = `Scene #${performer.id}`;
+      title = `Performer #${performer.id}`;
     }
     
     const screenshotPath = performer.paths ? performer.paths.screenshot : null;
@@ -631,12 +631,12 @@ async function updatePerformerRating(performerId, newRating) {
               <div class="pwr-meta-item"><strong>Performers:</strong> ${performers}</div>
               <div class="pwr-meta-item"><strong>Date:</strong> ${performer.date || '<span class="pwr-none">None</span>'}</div>
               <div class="pwr-meta-item"><strong>Rating:</strong> ${stashRating}</div>
-              <div class="pwr-meta-item pwr-tags-row"><strong>Tags:</strong> ${tags.length > 0 ? tags.map((tag) => `<span class="pwr-tag">${tag}</span>`).join("") : '<span class="pwr-none">None</span>'}</div>
+              <div class="pwr-meta-item pwr-tags-row"><strong>Tags:</strong> ${tags.length > 0 ? tags.map((tag) => `<span class="pwr-tag">${tag}</span>`).join("") : '<span class="pwr-none">None</span>'}
             </div>
           </div>
           
           <div class="pwr-choose-btn">
-            ✓ Choose This Scene
+            ✓ Choose This Performer
           </div>
         </div>
       </div>
@@ -890,7 +890,7 @@ async function updatePerformerRating(performerId, newRating) {
           // Falling performer won - found their floor!
           // Set their rating to just above the performer they beat
           const finalRating = Math.min(100, loserRating + 1);
-          updateSceneRating(gauntletFallingScene.id, finalRating);
+          updatePerformerRating(gauntletFallingScene.id, finalRating);
           
           // Final rank is one above the opponent (we beat them, so we're above them)
           const opponentRank = loserId === currentPair.left.id ? currentRanks.left : currentRanks.right;
