@@ -690,8 +690,8 @@ async function fetchPerformerCount(performerFilter = {}) {
 
   const allPerformers = result.findPerformers.performers || [];
   
-  // Filter out performers without images
-  const performersWithImages = allPerformers.filter(p => p.image_path);
+  // Filter out performers without images (check for null, undefined, and empty strings)
+  const performersWithImages = allPerformers.filter(p => p.image_path && p.image_path.trim() !== '');
   
   if (performersWithImages.length < 2) {
     throw new Error("Not enough performers with images for comparison. You need at least 2 performers with images.");
@@ -726,8 +726,8 @@ async function fetchPerformerCount(performerFilter = {}) {
 
     const performers = result.findPerformers.performers || [];
     
-    // Filter out performers without images
-    const performersWithImages = performers.filter(p => p.image_path);
+    // Filter out performers without images (check for null, undefined, and empty strings)
+    const performersWithImages = performers.filter(p => p.image_path && p.image_path.trim() !== '');
     
     if (performersWithImages.length < 2) {
       // Fallback to random if not enough rated performers
@@ -796,8 +796,8 @@ async function fetchPerformerCount(performerFilter = {}) {
 
     const performers = result.findPerformers.performers || [];
     
-    // Filter out performers without images
-    const performersWithImages = performers.filter(p => p.image_path);
+    // Filter out performers without images (check for null, undefined, and empty strings)
+    const performersWithImages = performers.filter(p => p.image_path && p.image_path.trim() !== '');
     totalItemsCount = performersWithImages.length;
     
     if (performersWithImages.length < 2) {
@@ -939,8 +939,8 @@ async function fetchPerformerCount(performerFilter = {}) {
 
     const performers = result.findPerformers.performers || [];
     
-    // Filter out performers without images
-    const performersWithImages = performers.filter(p => p.image_path);
+    // Filter out performers without images (check for null, undefined, and empty strings)
+    const performersWithImages = performers.filter(p => p.image_path && p.image_path.trim() !== '');
     totalItemsCount = performersWithImages.length;
     
     if (performersWithImages.length < 2) {
