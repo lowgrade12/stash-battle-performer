@@ -12,7 +12,8 @@
   let gauntletFalling = false; // True when champion lost and is finding their floor
   let gauntletFallingScene = null; // The performer that's falling to find its position
   let totalPerformersCount = 0; // Total performers for position display
-  let disableChoice = false; // Track when inputs should be disabled to prevent multiple events 
+  let disableChoice = false; // Track when inputs should be disabled to prevent multiple events
+  let battleType = "performers"; // This plugin is for performers only 
 
   // ============================================
   // GRAPHQL QUERIES
@@ -80,16 +81,14 @@
   });
 
   const allPerformers = result.findPerformers.performers || [];
-  // ... rest of your selection logic
-}
-    
-    if (allPerformers.length < 2) {
-      throw new Error("Not enough performers returned from query.");
-    }
-
-    const shuffled = allPerformers.sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 2);
+  
+  if (allPerformers.length < 2) {
+    throw new Error("Not enough performers returned from query.");
   }
+
+  const shuffled = allPerformers.sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 2);
+}
 
   // Swiss mode: fetch two performers with similar ratings
   async function fetchSwissPairPerformers() {
@@ -378,47 +377,21 @@
       isVictory: false
     };
   }
-  
 
   // ============================================
-  // WRAPPER FUNCTIONS (Route based on battleType)
-  // ============================================
-
-  async function fetchSwissPairPerformers() {
-    return battleType === "scenes" ? await fetchSwissPairScenes() : await fetchSwissPairPerformers();
-  }
-
-  async function fetchGauntletPairPerformers() {
-    return battleType === "scenes" ? await fetchGauntletPairScenes() : await fetchGauntletPairPerformers();
-  }
-
-  async function fetchChampionPairPerformers() {
-    return battleType === "scenes" ? await fetchChampionPairScenes() : await fetchChampionPairPerformers();
-  }
-
-  async function updateRating(entityId, newRating) {
-    if (battleType === "scenes") {
-      return await updateSceneRating(entityId, newRating);
-    } else {
-      return await updatePerformerRating(entityId, newRating);
-    }
-  }
-
-
-  // ============================================
-  // WRAPPER FUNCTIONS (Route based on battleType)
+  // WRAPPER FUNCTIONS (Simplified for performers only)
   // ============================================
 
   async function fetchSwissPair() {
-    return battleType === "scenes" ? await fetchSwissPairScenes() : await fetchSwissPairPerformers();
+    return await fetchSwissPairPerformers();
   }
 
   async function fetchGauntletPair() {
-    return battleType === "scenes" ? await fetchGauntletPairScenes() : await fetchGauntletPairPerformers();
+    return await fetchGauntletPairPerformers();
   }
 
   async function fetchChampionPair() {
-    return battleType === "scenes" ? await fetchChampionPairScenes() : await fetchChampionPairPerformers();
+    return await fetchChampionPairPerformers();
   }
 
   function createVictoryScreen(champion) {
@@ -1105,18 +1078,8 @@
 
   function shouldShowButton() {
     const path = window.location.pathname;
-    // Show on /performers or /scenes exactly
-    const isPerformers = path === '/performers' || path === '/performers/';
-    const isScenes = path === '/scenes' || path === '/scenes/';
-    
-    // Set battleType based on current page
-    if (isPerformers) {
-      battleType = "performers";
-    } else if (isScenes) {
-      battleType = "scenes";
-    }
-    
-    return isPerformers || isScenes;
+    // Only show on /performers page
+    return path === '/performers' || path === '/performers/';
   }
 
   function addFloatingButton() {
