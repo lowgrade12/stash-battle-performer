@@ -84,7 +84,7 @@
 
 /* Comparison Area - Fixed Height */
 .pwr-comparison-area {
-  min-height: 600px;
+  min-height: 400px;
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -107,7 +107,7 @@
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
-  min-height: 550px;
+  min-height: 350px;
 }
 
 @media (max-width: 1200px) {
@@ -223,7 +223,7 @@
 /* Scene Image */
 .pwr-scene-image-container {
   position: relative;
-  aspect-ratio: 2 / 3;
+  aspect-ratio: 3 / 2;
   overflow: hidden;
   cursor: pointer;
 }
@@ -458,7 +458,7 @@
   font-size: 1.2rem;
   color: #888;
   width: 100%;
-  min-height: 550px;
+  min-height: 350px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -654,7 +654,7 @@
 
 .pwr-victory-image {
   width: 100%;
-  aspect-ratio: 2 / 3;
+  aspect-ratio: 3 / 2;
   object-fit: cover;
 }
 
