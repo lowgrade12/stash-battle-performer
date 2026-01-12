@@ -139,7 +139,7 @@ async function fetchSceneCount() {
 
     const scenes = result.findScenes.scenes || [];
     
-    if (scenes.length < 2) {
+    if (items.length < 2) {
       // Fallback to random if not enough rated scenes
       return { scenes: await fetchRandomScenes(2), ranks: [null, null] };
     }
@@ -205,7 +205,7 @@ async function fetchSceneCount() {
     const scenes = result.findScenes.scenes || [];
     totalItemsCount = result.findScenes.count || scenes.length;
     
-    if (scenes.length < 2) {
+    if (items.length < 2) {
       return { scenes: await fetchRandomScenes(2), ranks: [null, null], isVictory: false, isFalling: false };
     }
 
@@ -343,7 +343,7 @@ async function fetchSceneCount() {
     const scenes = result.findScenes.scenes || [];
     totalItemsCount = result.findScenes.count || scenes.length;
     
-    if (scenes.length < 2) {
+    if (items.length < 2) {
       return { scenes: await fetchRandomScenes(2), ranks: [null, null], isVictory: false };
     }
 
@@ -617,7 +617,7 @@ async function fetchSceneCount() {
   function finalizeGauntletLoss(championId, winnerRating) {
     // Set champion rating to just below the scene that beat them
     const newRating = Math.max(1, winnerRating - 1);
-    updateSceneRating(championId, newRating);
+    updateItemRating(championId, newRating);
     return newRating;
   }
 
