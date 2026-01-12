@@ -1031,16 +1031,7 @@ async function fetchPerformerCount(performerFilter = {}) {
   // UI COMPONENTS
   // ============================================
 
-  function formatDuration(seconds) {
-    if (!seconds) return "N/A";
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    if (h > 0) {
-      return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-    }
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  }
+  
 
   function createSceneCard(scene, side, rank = null, streak = null) {
     const file = scene.files && scene.files[0] ? scene.files[0] : {};
@@ -1054,7 +1045,7 @@ async function fetchPerformerCount(performerFilter = {}) {
     // Title fallback: title -> filename from path -> Scene ID
     let title = scene.title;
     if (!title && file.path) {
-      const pathParts = file.path.split(/[/\\\\]/);
+      const pathParts = file.path.split(/[/\\]/);
       title = pathParts[pathParts.length - 1].replace(/\.[^/.]+$/, "");
     }
     if (!title) {
@@ -1313,11 +1304,11 @@ async function fetchPerformerCount(performerFilter = {}) {
           return;
         }
         
-        const items = championResult.scenes || championResult.performers;
+        items = championResult.scenes || championResult.performers;
         ranks = championResult.ranks;
       } else {
         const swissResult = await fetchSwissPair();
-        scenes = (swissResult.scenes || swissResult.performers);
+        items = swissResult.scenes || swissResult.performers;
         ranks = swissResult.ranks;
       }
       
