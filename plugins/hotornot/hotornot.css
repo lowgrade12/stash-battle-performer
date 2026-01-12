@@ -792,7 +792,7 @@
 
 /* Ensure the HotOrNot images fit vertically and horizontally */
 .hotornot-container .performer-card .performer-image-container img {
-    max-height: 70vh !important; 
+    max-height: 70vh !important;
     object-fit: contain !important;
     width: auto !important;
     height: auto !important;
