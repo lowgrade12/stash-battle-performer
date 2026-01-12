@@ -223,7 +223,7 @@
 /* Scene Image */
 .hon-scene-image-container {
   position: relative;
-  aspect-ratio: 2 / 3;
+  aspect-ratio: 3 / 4;
   overflow: hidden;
   cursor: pointer;
 }
