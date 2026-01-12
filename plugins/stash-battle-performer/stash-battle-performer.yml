@@ -1,9 +1,0 @@
-name: Stash Battle Performer
-description: Adds an ELO based ranking system for performers
-version: 1.0.0
-url: https://github.com/lowgrade12/stash-battle-performer.git
-ui:
-  javascript:
-    - stash-battle-performer.js
-  css:
-    - stash-battle-performer.css

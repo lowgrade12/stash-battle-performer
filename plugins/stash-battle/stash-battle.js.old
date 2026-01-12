@@ -5,15 +5,15 @@
   let currentPair = { left: null, right: null };
   let currentRanks = { left: null, right: null };
   let currentMode = "swiss"; // "swiss", "gauntlet", or "champion"
-  let gauntletChampion = null; // The performer currently on a winning streak
+  let gauntletChampion = null; // The item currently on a winning streak (scene or performer)
   let gauntletWins = 0; // Current win streak
   let gauntletChampionRank = 0; // Current rank position (1 = top)
-  let gauntletDefeated = []; // IDs of performers defeated in current run
+  let gauntletDefeated = []; // IDs of items defeated in current run
   let gauntletFalling = false; // True when champion lost and is finding their floor
-  let gauntletFallingPerformer = null; // The performer that's falling to find its position
-  let totalPerformersCount = 0; // Total performers for position display
+  let gauntletFallingItem = null; // The item that's falling to find its position (scene or performer)
+  let totalItemsCount = 0; // Total items for position display
   let disableChoice = false; // Track when inputs should be disabled to prevent multiple events
-  let battleType = "performers"; // This plugin is for performers only 
+  let battleType = "performers"; // "performers" or "scenes" - determined by current page 
 
   // ============================================
   // GRAPHQL QUERIES
@@ -29,7 +29,7 @@
     });
     const result = await response.json();
     if (result.errors) {
-      console.error("[Stash Battle Performer] GraphQL error:", result.errors);
+      console.error("[Stash Battle] GraphQL error:", result.errors);
       throw new Error(result.errors[0].message);
     }
     return result.data;
@@ -44,6 +44,30 @@
     ethnicity
     country
     gender
+  `;
+
+  const SCENE_FRAGMENT = `
+    id
+    title
+    date
+    rating100
+    paths {
+      screenshot
+      preview
+    }
+    files {
+      duration
+      path
+    }
+    studio {
+      name
+    }
+    performers {
+      name
+    }
+    tags {
+      name
+    }
   `;
 
   async function fetchPerformerCount(performerFilter = {}) {
