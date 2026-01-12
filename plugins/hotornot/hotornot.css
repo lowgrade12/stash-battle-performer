@@ -224,6 +224,7 @@
 .hon-scene-image-container {
   position: relative;
   aspect-ratio: 2 / 3;
+  max-height: 70vh;
   overflow: hidden;
   cursor: pointer;
 }
@@ -655,6 +656,7 @@
 .hon-victory-image {
   width: 100%;
   aspect-ratio: 2 / 3;
+  max-height: 60vh;
   object-fit: contain;
 }
 
