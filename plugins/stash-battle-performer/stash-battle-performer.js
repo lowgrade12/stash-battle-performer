@@ -14,6 +14,7 @@
   let totalPerformersCount = 0; // Total performers for position display
   let disableChoice = false; // Track when inputs should be disabled to prevent multiple events
   let battleType = "performers"; // This plugin is for performers only 
+  let selectedGender = "FEMALE"; // Filter battles by gender: "ALL", "FEMALE", "MALE", "TRANSGENDER_MALE", "TRANSGENDER_FEMALE", "INTERSEX", "NON_BINARY" 
 
   // ============================================
   // GRAPHQL QUERIES
@@ -43,29 +44,43 @@
     birthdate
     ethnicity
     country
+    gender
   `;
 
-  async function fetchPerformerCount() {
+  async function fetchPerformerCount(performerFilter = {}) {
     const countQuery = `
-      query FindPerformers {
-        findPerformers(filter: { per_page: 0 }) {
+      query FindPerformers($performer_filter: PerformerFilterType) {
+        findPerformers(performer_filter: $performer_filter, filter: { per_page: 0 }) {
           count
         }
       }
     `;
-    const countResult = await graphqlQuery(countQuery);
+    const countResult = await graphqlQuery(countQuery, { performer_filter: performerFilter });
     return countResult.findPerformers.count;
   }
 
+  function getPerformerFilter() {
+    const filter = {};
+    if (selectedGender !== "ALL") {
+      // Filter for specific gender
+      filter.gender = {
+        value: [selectedGender],
+        modifier: "INCLUDES"
+      };
+    }
+    return filter;
+  }
+
  async function fetchRandomPerformers(count = 2) {
-  const totalPerformers = await fetchPerformerCount(); // Updated variable name
+  const performerFilter = getPerformerFilter();
+  const totalPerformers = await fetchPerformerCount(performerFilter);
   if (totalPerformers < 2) {
-    throw new Error("Not enough performers for comparison. You need at least 2 performers.");
+    throw new Error("Not enough performers for comparison. You need at least 2 performers of the selected gender.");
   }
 
   const performerQuery = `
-    query FindRandomPerformers($filter: FindFilterType) {
-      findPerformers(filter: $filter) {
+    query FindRandomPerformers($performer_filter: PerformerFilterType, $filter: FindFilterType) {
+      findPerformers(performer_filter: $performer_filter, filter: $filter) {
         performers {
           ${PERFORMER_FRAGMENT}
         }
@@ -74,6 +89,7 @@
   `;
 
   const result = await graphqlQuery(performerQuery, {
+    performer_filter: performerFilter,
     filter: {
       per_page: Math.min(100, totalPerformers),
       sort: "random"
@@ -92,9 +108,10 @@
 
   // Swiss mode: fetch two performers with similar ratings
   async function fetchSwissPairPerformers() {
+    const performerFilter = getPerformerFilter();
     const performersQuery = `
-      query FindPerformersByRating($filter: FindFilterType) {
-        findPerformers(filter: $filter) {
+      query FindPerformersByRating($performer_filter: PerformerFilterType, $filter: FindFilterType) {
+        findPerformers(performer_filter: $performer_filter, filter: $filter) {
           performers {
             ${PERFORMER_FRAGMENT}
           }
@@ -104,6 +121,7 @@
 
     // Get performers sorted by rating
     const result = await graphqlQuery(performersQuery, {
+      performer_filter: performerFilter,
       filter: {
         per_page: -1, // Get all for accurate ranking
         sort: "rating",
@@ -156,9 +174,10 @@
 
   // Gauntlet mode: champion vs next challenger
   async function fetchGauntletPairPerformers() {
+    const performerFilter = getPerformerFilter();
     const performersQuery = `
-      query FindPerformersByRating($filter: FindFilterType) {
-        findPerformers(filter: $filter) {
+      query FindPerformersByRating($performer_filter: PerformerFilterType, $filter: FindFilterType) {
+        findPerformers(performer_filter: $performer_filter, filter: $filter) {
           count
           performers {
             ${PERFORMER_FRAGMENT}
@@ -169,6 +188,7 @@
 
     // Get ALL performers sorted by rating descending (highest first)
     const result = await graphqlQuery(performersQuery, {
+      performer_filter: performerFilter,
       filter: {
         per_page: -1, // Get all
         sort: "rating",
@@ -294,9 +314,10 @@
 
   // Champion mode: like gauntlet but winner stays on (no falling)
   async function fetchChampionPairPerformers() {
+    const performerFilter = getPerformerFilter();
     const performersQuery = `
-      query FindPerformersByRating($filter: FindFilterType) {
-        findPerformers(filter: $filter) {
+      query FindPerformersByRating($performer_filter: PerformerFilterType, $filter: FindFilterType) {
+        findPerformers(performer_filter: $performer_filter, filter: $filter) {
           count
           performers {
             ${PERFORMER_FRAGMENT}
@@ -307,6 +328,7 @@
 
     // Get ALL performers sorted by rating descending (highest first)
     const result = await graphqlQuery(performersQuery, {
+      performer_filter: performerFilter,
       filter: {
         per_page: -1,
         sort: "rating",
@@ -633,6 +655,19 @@
         <div class="pwr-header">
           <h1 class="pwr-title">⚔️ Stash Battle Performer</h1>
           <p class="pwr-subtitle">Compare performers head-to-head to build your rankings</p>
+          
+          <div class="pwr-gender-filter">
+            <label for="pwr-gender-select" class="pwr-gender-label">Gender Filter:</label>
+            <select id="pwr-gender-select" class="pwr-gender-select">
+              <option value="ALL">All Genders</option>
+              <option value="FEMALE" selected>Female</option>
+              <option value="MALE">Male</option>
+              <option value="TRANSGENDER_MALE">Transgender Male</option>
+              <option value="TRANSGENDER_FEMALE">Transgender Female</option>
+              <option value="INTERSEX">Intersex</option>
+              <option value="NON_BINARY">Non-Binary</option>
+            </select>
+          </div>
           
           <div class="pwr-mode-toggle">
             <button class="pwr-mode-btn ${currentMode === 'swiss' ? 'active' : ''}" data-mode="swiss">
@@ -1098,6 +1133,32 @@
     `;
 
     document.body.appendChild(modal);
+
+    // Gender selector
+    const genderSelect = modal.querySelector("#pwr-gender-select");
+    if (genderSelect) {
+      genderSelect.value = selectedGender;
+      genderSelect.addEventListener("change", () => {
+        const newGender = genderSelect.value;
+        if (newGender !== selectedGender) {
+          selectedGender = newGender;
+          
+          // Reset gauntlet/champion state when switching gender
+          gauntletChampion = null;
+          gauntletWins = 0;
+          gauntletDefeated = [];
+          gauntletFalling = false;
+          gauntletFallingPerformer = null;
+          
+          // Re-show actions (skip button) in case it was hidden
+          const actionsEl = document.querySelector(".pwr-actions");
+          if (actionsEl) actionsEl.style.display = "";
+          
+          // Load new pair with new gender filter
+          loadNewPair();
+        }
+      });
+    }
 
     // Mode toggle buttons
     modal.querySelectorAll(".pwr-mode-btn").forEach((btn) => {
