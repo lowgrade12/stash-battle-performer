@@ -68,6 +68,7 @@
     ethnicity
     country
     gender
+    scene_count
     scenes {
       paths {
         screenshot
@@ -1118,14 +1119,16 @@ async function fetchPerformerCount(performerFilter = {}) {
   function getRandomPerformerImage(performer) {
     // Check if performer has scenes with screenshots
     if (performer.scenes && performer.scenes.length > 0) {
-      // Filter scenes that have a screenshot
-      const scenesWithScreenshots = performer.scenes.filter(scene => 
-        scene.paths && scene.paths.screenshot
+      // Filter scenes that have a valid screenshot path (limit to first 50 for performance)
+      const scenesToCheck = performer.scenes.slice(0, 50);
+      const scenesWithScreenshots = scenesToCheck.filter(scene => 
+        scene.paths && scene.paths.screenshot && scene.paths.screenshot.trim() !== ''
       );
       
       if (scenesWithScreenshots.length > 0) {
         // Pick a random scene screenshot
-        const randomScene = scenesWithScreenshots[Math.floor(Math.random() * scenesWithScreenshots.length)];
+        const randomIndex = Math.floor(Math.random() * scenesWithScreenshots.length);
+        const randomScene = scenesWithScreenshots[randomIndex];
         return randomScene.paths.screenshot;
       }
     }
