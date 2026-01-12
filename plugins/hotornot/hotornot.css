@@ -232,8 +232,8 @@
 /* Performer images - adjust aspect ratio for better fit */
 .hon-performer-image-container {
   aspect-ratio: auto;
-  min-height: 300px;
-  max-height: 500px;
+  min-height: 250px;
+  max-height: 400px;
 }
 
 .hon-scene-image {
@@ -271,11 +271,11 @@
   z-index: 1;
 }
 
-.hon-scene-card:hover .hon-hover-preview {
+.hon-scene-card:has(.hon-hover-preview):hover .hon-hover-preview {
   opacity: 1;
 }
 
-.hon-scene-card:hover .hon-scene-image:not(.hon-no-image) {
+.hon-scene-card:has(.hon-hover-preview):hover .hon-scene-image:not(.hon-no-image) {
   opacity: 0;
 }
 
