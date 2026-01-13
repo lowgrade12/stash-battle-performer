@@ -72,21 +72,10 @@
 
   const IMAGE_FRAGMENT = `
     id
-    title
     rating100
-    date
     paths {
       thumbnail
       image
-    }
-    studio {
-      name
-    }
-    performers {
-      name
-    }
-    tags {
-      name
     }
   `;
 
@@ -434,7 +423,7 @@ async function fetchSceneCount() {
       imagePath = champion.image_path;
     } else if (battleType === "images") {
       // Image
-      title = champion.title || `Image #${champion.id}`;
+      title = `Image #${champion.id}`;
       imagePath = champion.paths && champion.paths.thumbnail ? champion.paths.thumbnail : null;
     } else {
       // Scene
@@ -482,7 +471,7 @@ async function fetchSceneCount() {
       imagePath = item.image_path;
     } else if (battleType === "images") {
       // Image
-      title = item.title || `Image #${item.id}`;
+      title = `Image #${item.id}`;
       imagePath = item.paths && item.paths.thumbnail ? item.paths.thumbnail : null;
     } else {
       // Scene
@@ -1573,20 +1562,9 @@ async function fetchPerformerCount(performerFilter = {}) {
   }
 
   function createImageCard(image, side, rank = null, streak = null) {
-    // Image title
-    const title = image.title || `Image #${image.id}`;
-    
     // Image paths
     const imagePath = image.paths && image.paths.image ? image.paths.image : null;
     const thumbnailPath = image.paths && image.paths.thumbnail ? image.paths.thumbnail : null;
-    
-    // Image metadata
-    const performers = image.performers && image.performers.length > 0 
-      ? image.performers.map((p) => p.name).join(", ") 
-      : "No performers";
-    const studio = image.studio ? image.studio.name : "No studio";
-    const tags = image.tags ? image.tags.slice(0, 5).map((t) => t.name) : [];
-    const stashRating = image.rating100 ? `${image.rating100}/100` : "Unrated";
     
     // Handle numeric ranks and string ranks
     let rankDisplay = '';
@@ -1608,29 +1586,15 @@ async function fetchPerformerCount(performerFilter = {}) {
       <div class="hon-image-card hon-scene-card" data-image-id="${image.id}" data-side="${side}" data-rating="${image.rating100 || 50}">
         <div class="hon-image-image-container hon-scene-image-container" data-image-url="/images/${image.id}">
           ${thumbnailPath 
-            ? `<img class="hon-image-image hon-scene-image" src="${thumbnailPath}" alt="${title}" loading="lazy" />`
+            ? `<img class="hon-image-image hon-scene-image" src="${thumbnailPath}" alt="Image #${image.id}" loading="lazy" />`
             : `<div class="hon-image-image hon-scene-image hon-no-image">No Image</div>`
           }
           ${streakDisplay}
+          ${rankDisplay ? `<div class="hon-image-rank-overlay">${rankDisplay}</div>` : ''}
           <div class="hon-click-hint">Click to open image</div>
         </div>
         
         <div class="hon-image-body hon-scene-body" data-winner="${image.id}">
-          <div class="hon-image-info hon-scene-info">
-            <div class="hon-image-title-row hon-scene-title-row">
-              <h3 class="hon-image-title hon-scene-title">${title}</h3>
-              ${rankDisplay}
-            </div>
-            
-            <div class="hon-image-meta hon-scene-meta">
-              <div class="hon-meta-item"><strong>Studio:</strong> ${studio}</div>
-              <div class="hon-meta-item"><strong>Performers:</strong> ${performers}</div>
-              ${image.date ? `<div class="hon-meta-item"><strong>Date:</strong> ${image.date}</div>` : ''}
-              <div class="hon-meta-item"><strong>Rating:</strong> ${stashRating}</div>
-              ${tags.length > 0 ? `<div class="hon-meta-item hon-tags-row"><strong>Tags:</strong> ${tags.map((tag) => `<span class="hon-tag">${tag}</span>`).join("")}</div>` : ''}
-            </div>
-          </div>
-          
           <div class="hon-choose-btn">
             ✓ Choose This Image
           </div>

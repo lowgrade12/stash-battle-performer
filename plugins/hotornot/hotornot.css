@@ -325,6 +325,22 @@
   box-shadow: 0 2px 8px rgba(255, 107, 53, 0.4);
 }
 
+/* Rank overlay for images */
+.hon-image-rank-overlay {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+}
+
+.hon-image-rank-overlay .hon-image-rank {
+  background: rgba(0, 0, 0, 0.8);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  display: inline-block;
+}
+
 /* Click hint overlay */
 .hon-click-hint {
   position: absolute;
