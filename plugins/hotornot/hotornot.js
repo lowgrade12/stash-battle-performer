@@ -581,7 +581,13 @@ async function fetchSceneCount() {
     // Update match count if performer object provided
     if (performerObj && battleType === "performers") {
       const currentMatches = parsePerformerEloData(performerObj);
+      
+      // Preserve existing custom fields and update only elo_matches
+      const existingFields = performerObj.customFields || [];
+      const otherFields = existingFields.filter(f => f.key !== "elo_matches");
+      
       input.customFields = [
+        ...otherFields,
         { key: "elo_matches", value: String(currentMatches + 1) }
       ];
     }
