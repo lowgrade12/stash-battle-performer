@@ -8,7 +8,7 @@ A head-to-head comparison plugin that helps you rank performers and images.
 
 **Features:**
 - **Three Comparison Modes:**
-  - **Swiss** ⚖️ – Fair matchups between similarly-rated items. Both ratings adjust based on the outcome.
+  - **Swiss** ⚖️ – Fair matchups between similarly-rated items. Both ratings adjust based on the outcome. For performers, recently matched performers are less likely to reappear (but not excluded) to reduce repetition.
   - **Gauntlet** 🎯 – Place a random item in your rankings. They climb from the bottom, challenging each item above them until they lose, then settle into their final position.
   - **Champion** 🏆 – Winner stays on. The winning item keeps battling until they're dethroned.
 
@@ -69,6 +69,7 @@ Building on the match count tracking, the plugin now tracks detailed statistics 
 - **Win Streaks**: Track current streaks, best win streaks, and worst loss streaks
 - **Match History**: Timestamp of last comparison
 - **Smart Upgrades**: Automatically upgrades from basic match count to comprehensive stats
+- **Recency-Aware Selection** (Swiss mode only): Recently matched performers are less likely to reappear, reducing repetition while keeping everyone in the pool
 
 **Example Stats:**
 - Total Matches: 42
@@ -78,6 +79,21 @@ Building on the match count tracking, the plugin now tracks detailed statistics 
 - Last Match: 2026-01-14
 
 Stats are stored in the `hotornot_stats` custom field and work seamlessly with all three comparison modes (Swiss, Gauntlet, Champion).
+
+**Recency Weighting (Swiss Mode):**
+In Swiss mode, performer selection uses the `last_match` timestamp to reduce (but not eliminate) recently-matched performers:
+- 0-1 hours ago: Very unlikely (~4% chance)
+- 1-6 hours ago: Less likely (~12% chance)
+- 6-24 hours ago: Moderately likely (~25% chance)
+- 24+ hours ago: Full probability (~50% chance)
+
+This ensures variety without completely excluding performers, so they can still appear if they're the best match rating-wise.
+
+**Performance Optimization for Large Libraries:**
+- Libraries with ≤1000 performers: Uses full dataset for accurate ranking
+- Libraries with >1000 performers: Uses intelligent sampling (500 performers) for fast performance
+- Recency weighting and rating-based matching work seamlessly in both modes
+- Optimized for libraries with 15,000+ performers
 
 **Technical Details:**
 - See [APPROACH2_IMPLEMENTATION.md](APPROACH2_IMPLEMENTATION.md) for implementation details
