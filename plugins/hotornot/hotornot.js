@@ -1736,20 +1736,6 @@ async function fetchPerformerCount(performerFilter = {}) {
     const selectionContainer = document.getElementById("hon-performer-selection");
     if (selectionContainer) {
       selectionContainer.style.display = "block";
-      
-      // Update the title based on the current mode
-      const titleEl = document.getElementById("hon-selection-title");
-      if (titleEl) {
-        const itemTypeSingular = battleType === "performers" ? "performer" : (battleType === "images" ? "image" : "scene");
-        if (currentMode === "gauntlet") {
-          titleEl.textContent = `Select a ${itemTypeSingular} to run the gauntlet:`;
-        } else if (currentMode === "champion") {
-          titleEl.textContent = `Select a ${itemTypeSingular} to start as champion:`;
-        } else {
-          titleEl.textContent = `Select a ${itemTypeSingular}:`;
-        }
-      }
-      
       loadPerformerSelection();
     }
     
@@ -1803,7 +1789,7 @@ async function fetchPerformerCount(performerFilter = {}) {
         </div>
 
         <div id="hon-performer-selection" class="hon-performer-selection" style="display: none;">
-          <h3 id="hon-selection-title" class="hon-selection-title">Select a ${itemTypeSingular}:</h3>
+          <h3 class="hon-selection-title">Select a ${itemTypeSingular} to run the gauntlet:</h3>
           <div id="hon-performer-list" class="hon-performer-list">
             <div class="hon-loading">Loading ${itemType}...</div>
           </div>
@@ -1835,8 +1821,8 @@ async function fetchPerformerCount(performerFilter = {}) {
     const comparisonArea = document.getElementById("hon-comparison-area");
     if (!comparisonArea) return;
 
-    // For gauntlet or champion mode with performers, show selection if no champion yet
-    if ((currentMode === "gauntlet" || currentMode === "champion") && battleType === "performers" && !gauntletChampion && !gauntletFalling) {
+    // For gauntlet mode with performers, show selection if no champion yet
+    if (currentMode === "gauntlet" && battleType === "performers" && !gauntletChampion && !gauntletFalling) {
       showPerformerSelection();
       return;
     }
@@ -2293,8 +2279,8 @@ function addFloatingButton() {
           const actionsEl = document.querySelector(".hon-actions");
           if (actionsEl) actionsEl.style.display = "";
           
-          // Hide performer selection if not in gauntlet or champion mode
-          if (currentMode !== "gauntlet" && currentMode !== "champion") {
+          // Hide performer selection if not in gauntlet mode
+          if (currentMode !== "gauntlet") {
             hidePerformerSelection();
           }
           
