@@ -1127,15 +1127,31 @@ async function fetchPerformerCount(performerFilter = {}) {
         performer2Index = selected2.index;
       }
     } else {
-      // No similar performers, pick closest
-      const otherPerformers = performers.filter(s => s.id !== performer1.id);
-      otherPerformers.sort((a, b) => {
-        const diffA = Math.abs((a.rating100 || 50) - rating1);
-        const diffB = Math.abs((b.rating100 || 50) - rating1);
+      // No similar performers, pick closest with recency weighting
+      const otherPerformersWithWeights = performersWithWeights.filter(pw => pw.performer.id !== performer1.id);
+      
+      // Sort by rating similarity
+      otherPerformersWithWeights.sort((a, b) => {
+        const diffA = Math.abs((a.performer.rating100 || 50) - rating1);
+        const diffB = Math.abs((b.performer.rating100 || 50) - rating1);
         return diffA - diffB;
       });
-      performer2 = otherPerformers[0];
-      performer2Index = performers.findIndex(s => s.id === performer2.id);
+      
+      // Apply weighted selection to the top 3 closest performers (if available)
+      const closestCount = Math.min(3, otherPerformersWithWeights.length);
+      const closestPerformers = otherPerformersWithWeights.slice(0, closestCount);
+      const closestWeights = closestPerformers.map(pw => pw.weight);
+      const selected2 = weightedRandomSelect(closestPerformers, closestWeights);
+      
+      if (selected2) {
+        performer2 = selected2.performer;
+        performer2Index = selected2.index;
+      } else {
+        // Ultimate fallback - just pick the closest
+        console.warn("[HotOrNot] Weighted selection for closest performer failed, using rating-based fallback");
+        performer2 = otherPerformersWithWeights[0].performer;
+        performer2Index = otherPerformersWithWeights[0].index;
+      }
     }
 
     return { 
