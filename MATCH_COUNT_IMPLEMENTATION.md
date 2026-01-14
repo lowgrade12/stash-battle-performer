@@ -2,7 +2,7 @@
 
 ## Overview
 
-The HotOrNot plugin now tracks the number of comparisons each performer has participated in using Stash's custom fields functionality. This data is used to provide a more accurate K-factor calculation in the ELO algorithm.
+The HotOrNot plugin now tracks the number of comparisons each performer has participated in using Stash's **native customFields API** (available in Stash v0.27+). This data is used to provide a more accurate K-factor calculation in the ELO algorithm.
 
 ## What Changed
 
@@ -26,49 +26,51 @@ The HotOrNot plugin now tracks the number of comparisons each performer has part
 
 ### Data Storage
 
-Match counts are stored in the `details` field on performers as JSON:
+Match counts are stored using Stash's **native customFields API** (v0.27+):
 
+```graphql
+{
+  customFields: [
+    { key: "elo_matches", value: "42" }
+  ]
+}
+```
+
+**Before v0.27** (deprecated approach): Custom data was stored as JSON in the `details` field:
 ```json
 {
-  "custom": {
-    "elo_matches": 42
-  },
-  "details": "Original bio text"
+  "details": "{\"custom\":{\"elo_matches\":42},\"details\":\"Bio text\"}"
 }
 ```
 
 ### Data Flow
 
-1. **Query**: Fetch performer with `details` field
-2. **Parse**: Extract `elo_matches` from JSON (default 0 if not present)
+1. **Query**: Fetch performer with `customFields` array
+2. **Parse**: Extract `elo_matches` from customFields (default 0 if not present)
 3. **Calculate**: Use match count to determine K-factor
-4. **Update**: After comparison, increment match count and save back to `details`
+4. **Update**: After comparison, increment match count and save to `customFields`
 
 ### Code Components
 
-#### 1. Helper Functions (lines 587-625)
+#### 1. Helper Functions
 
 **parsePerformerEloData(performer)**
-- Parses match count from `details` JSON
-- Handles legacy text details (preserves existing bio text)
-- Returns `{ matches: number, detailsText: string }`
-
-**updatePerformerEloData(performer, increment)**
-- Creates updated JSON with incremented match count
-- Preserves existing bio text
-- Returns JSON string for `details` field
+- Parses match count from `customFields` array
+- Finds the field with `key: "elo_matches"`
+- Returns number of matches (integer)
 
 **getKFactor(currentRating, matchCount)**
 - Uses match count when available (performers only)
 - Falls back to rating-based heuristic for non-performers or when count unavailable
-- Returns K-factor value (8, 10, 12, or 16)
+- Returns K-factor value (8, 12, or 16)
 
 #### 2. Updated Functions
 
 **updatePerformerRating(performerId, newRating, performerObj)**
 - Now accepts optional `performerObj` parameter
-- Updates both `rating100` AND `details` fields
+- Updates both `rating100` AND `customFields` array
 - Increments match count when performer object provided
+- Sets `customFields: [{ key: "elo_matches", value: "43" }]`
 
 **handleComparison(..., winnerObj, loserObj)**
 - Now accepts optional winner/loser objects
@@ -78,23 +80,29 @@ Match counts are stored in the `details` field on performers as JSON:
 #### 3. Call Sites Updated
 
 All three comparison modes now pass full performer objects:
-- **Swiss mode** (line ~2222)
-- **Gauntlet mode** (line ~2139)
-- **Champion mode** (line ~2187)
+- **Swiss mode**
+- **Gauntlet mode**
+- **Champion mode**
+
+## Stash Version Requirements
+
+**Requires Stash v0.27 or later** for native customFields support.
+
+For older Stash versions, the deprecated approach of storing JSON in the `details` field would need to be used (see git history for the old implementation).
 
 ## Backward Compatibility
 
-### Existing Performers
-- Performers without `details` field: match count starts at 0
-- Performers with legacy text in `details`: text preserved, match count starts at 0
-- First comparison will create the JSON structure automatically
+### New Stash Installations (v0.27+)
+- Performers without `elo_matches` custom field: match count starts at 0
+- First comparison will create the custom field automatically
+- No migration needed
 
-### Migration
-No manual migration needed! The system automatically:
-1. Detects missing or legacy `details` fields
-2. Preserves any existing text
-3. Starts tracking matches from 0
-4. Builds accurate counts over time
+### Upgrading from Old Implementation
+If you were using the previous implementation that stored data in the `details` field as JSON:
+- The old data will be ignored (safely left in `details` field)
+- Match counts will start fresh from 0 with the new implementation
+- The `details` field text/bio is preserved and unaffected
+- No manual data migration needed - counts will rebuild naturally over time
 
 ### Other Content Types
 - **Scenes** and **Images**: Continue using rating-based K-factor
@@ -182,34 +190,36 @@ Tests verify:
 1. Is it a performer comparison? (Scenes/images don't track)
 2. Are both performers being updated?
 3. Check browser console for errors
+4. Verify Stash version is v0.27 or later
 
 **Debug:**
 ```javascript
 // In browser console after comparison:
-console.log(currentPair.left.details);
-console.log(currentPair.right.details);
+console.log(currentPair.left.customFields);
+console.log(currentPair.right.customFields);
 ```
 
-### JSON Parse Errors
+### GraphQL Errors
 
-**Cause:** Malformed JSON in `details` field
+**Error: "Field 'customFields' doesn't exist on type 'PerformerUpdateInput'"**
 
-**Fix:** The code automatically handles this - falls back to treating as text
+**Cause:** Your Stash version is older than v0.27
 
-**Verify:**
-```javascript
-// Should not throw error
-parsePerformerEloData({ details: "invalid { json" });
-```
+**Fix:** 
+1. Upgrade to Stash v0.27 or later
+2. OR use the old implementation (see git history for JSON-in-details approach)
 
-### Bio Text Lost
+### Custom Field Not Appearing
 
-**Should never happen** - code preserves existing text
-
-**Verify in Stash:**
+**Check in Stash UI:**
 1. Go to performer page
-2. Check Details section
-3. Should see bio text (if it existed)
+2. Look for custom fields section
+3. Should see `elo_matches` field with a number value
+
+**If missing:**
+1. Check browser console for GraphQL errors
+2. Verify the mutation is being called
+3. Confirm Stash version supports customFields
 
 ## Future Enhancements
 
@@ -244,7 +254,11 @@ Once match tracking is stable, consider adding:
   name
   image_path
   rating100
-  details        # ← Added
+  details
+  customFields {
+    key
+    value
+  }
   birthdate
   ethnicity
   country
@@ -258,7 +272,10 @@ mutation PerformerUpdate($input: PerformerUpdateInput!) {
   performerUpdate(input: $input) {
     id
     rating100
-    details      # ← Added
+    customFields {
+      key
+      value
+    }
   }
 }
 ```
@@ -269,40 +286,40 @@ mutation PerformerUpdate($input: PerformerUpdateInput!) {
   "input": {
     "id": "performer-id",
     "rating100": 68,
-    "details": "{\"custom\":{\"elo_matches\":15},\"details\":\"Bio text\"}"
+    "customFields": [
+      { "key": "elo_matches", "value": "15" }
+    ]
   }
 }
 ```
 
-### JSON Structure
+### Custom Field Structure
 
-**Empty/New Performer**
-```json
+**New/Empty Performer**
+```graphql
 {
-  "custom": {
-    "elo_matches": 0
-  },
-  "details": ""
+  id: "123",
+  customFields: []
 }
 ```
 
-**With Match Count**
-```json
+**After First Match**
+```graphql
 {
-  "custom": {
-    "elo_matches": 42
-  },
-  "details": ""
+  id: "123",
+  customFields: [
+    { key: "elo_matches", value: "1" }
+  ]
 }
 ```
 
-**With Bio and Match Count**
-```json
+**After Multiple Matches**
+```graphql
 {
-  "custom": {
-    "elo_matches": 42
-  },
-  "details": "This performer is amazing! Born in..."
+  id: "123",
+  customFields: [
+    { key: "elo_matches", value: "42" }
+  ]
 }
 ```
 
