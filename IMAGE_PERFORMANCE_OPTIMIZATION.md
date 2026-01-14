@@ -2,13 +2,13 @@
 
 ## Summary
 
-This document describes the performance optimizations made to handle large image libraries (177,000+ images).
+This document describes the performance optimizations made to handle large image libraries (177,000+ images) and the simplification to use Swiss mode exclusively for images.
 
 ## Changes Made
 
 ### 1. Sampling for Image Swiss Mode
 
-Similar to the existing performer optimization, images now use intelligent sampling when the library exceeds 1,000 images:
+Images use intelligent sampling when the library exceeds 1,000 images:
 
 - **Libraries with ≤1,000 images**: Uses full dataset for accurate ranking
 - **Libraries with >1,000 images**: Uses intelligent sampling (500 images) for fast performance
@@ -19,37 +19,40 @@ Similar to the existing performer optimization, images now use intelligent sampl
 - When sampling is used, ranks are set to `null` since they don't represent true position in the full library
 - Same adaptive rating window logic applies (10-25 point window based on pool size)
 
-### 2. 5-Image Selection for Gauntlet Mode
+### 2. Swiss Mode Only for Images
 
-Added the same 5-image selection UI that was previously only available for performers:
+Images now use **Swiss mode exclusively** for optimal performance and simplicity:
 
-**New Functions:**
-- `fetchImagesForSelection(count = 5)`: Fetches a random sample of images for selection
-- `createImageSelectionCard(image)`: Creates HTML for an image selection card
-- `loadImageSelection()`: Loads and displays the image selection UI
-- `startGauntletWithImage(image)`: Starts the gauntlet with the selected image as champion
-- `showImageSelection()`: Shows the image selection UI
-- `hideImageSelection()`: Hides the image selection UI
+**What was removed:**
+- Gauntlet mode for images (including 5-image selection UI)
+- Champion mode for images
+- Mode selection toggle on images page
 
-**Integration:**
-- Updated `loadNewPair()` to show image selection when entering gauntlet mode with images
-- Updated mode switching logic to hide image selection when leaving gauntlet mode
-- Reuses the same HTML container (`hon-performer-selection`) and styling as performer selection
+**What was kept:**
+- Full Swiss mode functionality with performance optimizations
+- All three modes (Swiss, Gauntlet, Champion) remain available for performers
+
+**Benefits:**
+- Simpler, cleaner UI for images
+- No need to track champion state or defeated opponents for images
+- Performance optimizations (sampling) work perfectly with Swiss mode
+- Users get straight into comparisons without mode selection
 
 ## Performance Impact
 
-### Before:
+### Before Optimization:
 - **Swiss Mode**: Fetched ALL images (177,000) from database, causing significant performance issues
-- **Gauntlet Mode**: No selection UI, random image was automatically chosen
+- **Gauntlet/Champion Modes**: Required full dataset loading and complex state tracking
 
-### After:
-- **Swiss Mode**: Fetches only 500 images when library > 1,000 images
-- **Gauntlet Mode**: Shows 5 random images to choose from, giving user control over which image to rank
+### After Optimization:
+- **Swiss Mode Only**: Fetches only 500 images when library > 1,000 images
+- **No Gauntlet/Champion**: Simplified code path, no unnecessary mode logic
 - **Expected Performance**: ~350x reduction in data transfer for large libraries (177,000 → 500 images)
+- **UI Performance**: Faster load times, simpler state management
 
 ## Technical Details
 
-The implementation follows the same pattern as the existing performer optimization:
+The implementation uses intelligent sampling:
 
 ```javascript
 // Sampling logic
@@ -65,13 +68,28 @@ filter: {
 }
 ```
 
+Mode enforcement for images:
+
+```javascript
+// Force Swiss mode for images
+if (path === '/images' || path === '/images/') {
+  battleType = "images";
+  currentMode = "swiss";  // Always Swiss for images
+}
+```
+
 ## User Experience
 
-1. **Swiss Mode**: No visible changes - users will just experience faster loading
-2. **Gauntlet Mode**: Users now see a selection screen with 5 random images to choose from
-   - Click an image to start the gauntlet with that image
-   - Same behavior as performer gauntlet mode
-   - More control over which images are ranked
+1. **Swiss Mode**: Fast, fair matchups with no mode selection needed
+   - Click the 🔥 button on images page
+   - Start comparing immediately (no mode choice)
+   - Rating adjustments happen in real-time
+   - Skip button always available
+
+2. **Performers**: Full mode selection remains available
+   - Swiss, Gauntlet, and Champion modes all work as before
+   - Mode toggle visible on performers page
+   - All existing features preserved
 
 ## Backward Compatibility
 
@@ -79,4 +97,5 @@ All changes are backward compatible:
 - Works with any size image library (2 to 177,000+)
 - No database schema changes required
 - Maintains existing rating algorithm and ELO calculations
-- UI automatically adapts based on battle type (performers vs images)
+- Existing image ratings preserved and continue to be updated
+- Performers retain all three modes unchanged
