@@ -26,17 +26,19 @@ The HotOrNot plugin now tracks the number of comparisons each performer has part
 
 ### Data Storage
 
-Match counts are stored using Stash's **native customFields API** (v0.27+):
+Match counts are stored using Stash's **native custom_fields API** as a Map type:
 
-```graphql
+```javascript
 {
-  customFields: [
-    { key: "elo_matches", value: "42" }
-  ]
+  custom_fields: {
+    elo_matches: "42"
+  }
 }
 ```
 
-**Before v0.27** (deprecated approach): Custom data was stored as JSON in the `details` field:
+**Note:** In recent versions of Stash, `custom_fields` is a Map type, not an array. Access fields directly as object properties (e.g., `custom_fields.elo_matches`).
+
+**Legacy approach** (deprecated): Custom data was stored as JSON in the `details` field:
 ```json
 {
   "details": "{\"custom\":{\"elo_matches\":42},\"details\":\"Bio text\"}"
@@ -55,8 +57,8 @@ Match counts are stored using Stash's **native customFields API** (v0.27+):
 #### 1. Helper Functions
 
 **parsePerformerEloData(performer)**
-- Parses match count from `customFields` array
-- Finds the field with `key: "elo_matches"`
+- Parses match count from `custom_fields` Map object
+- Accesses `custom_fields.elo_matches` directly
 - Returns number of matches (integer)
 
 **getKFactor(currentRating, matchCount)**
@@ -68,9 +70,9 @@ Match counts are stored using Stash's **native customFields API** (v0.27+):
 
 **updatePerformerRating(performerId, newRating, performerObj)**
 - Now accepts optional `performerObj` parameter
-- Updates both `rating100` AND `customFields` array
+- Updates both `rating100` AND `custom_fields` Map
 - Increments match count when performer object provided
-- Sets `customFields: [{ key: "elo_matches", value: "43" }]`
+- Uses partial update: `custom_fields: { partial: { elo_matches: "43" } }`
 
 **handleComparison(..., winnerObj, loserObj)**
 - Now accepts optional winner/loser objects
@@ -86,18 +88,24 @@ All three comparison modes now pass full performer objects:
 
 ## Stash Version Requirements
 
-**Requires Stash v0.27 or later** for native customFields support.
+**Requires Stash with Map-type custom_fields support** (modern versions).
 
-For older Stash versions, the deprecated approach of storing JSON in the `details` field would need to be used (see git history for the old implementation).
+The current implementation uses the Map type for `custom_fields`. If you're using an older version of Stash that still uses array-based customFields, you may need to use an older version of this plugin (see git history for array-based implementation).
 
 ## Backward Compatibility
 
-### New Stash Installations (v0.27+)
+### New Installations
 - Performers without `elo_matches` custom field: match count starts at 0
 - First comparison will create the custom field automatically
 - No migration needed
 
-### Upgrading from Old Implementation
+### Upgrading from Array-Based customFields
+If you were using an older version of this plugin that used array-based customFields:
+- The plugin now uses Map-type custom_fields
+- Existing match counts in custom_fields should continue to work
+- Data format is automatically compatible
+
+### Upgrading from Old Implementation (details field)
 If you were using the previous implementation that stored data in the `details` field as JSON:
 - The old data will be ignored (safely left in `details` field)
 - Match counts will start fresh from 0 with the new implementation
@@ -201,12 +209,18 @@ console.log(currentPair.right.customFields);
 
 ### GraphQL Errors
 
-**Error: "Field 'customFields' doesn't exist on type 'PerformerUpdateInput'"**
+**Error: "Cannot query field 'key' on type 'Map'"**
 
-**Cause:** Your Stash version is older than v0.27
+**Cause:** Your version of the plugin is using the old array-based customFields format, but your Stash version uses the Map type.
+
+**Fix:** Update to the latest version of this plugin which uses Map-type custom_fields.
+
+**Error: "Field 'custom_fields' doesn't exist on type 'PerformerUpdateInput'"**
+
+**Cause:** Your Stash version doesn't support custom_fields
 
 **Fix:** 
-1. Upgrade to Stash v0.27 or later
+1. Upgrade to a newer version of Stash with custom_fields support
 2. OR use the old implementation (see git history for JSON-in-details approach)
 
 ### Custom Field Not Appearing
@@ -255,10 +269,7 @@ Once match tracking is stable, consider adding:
   image_path
   rating100
   details
-  customFields {
-    key
-    value
-  }
+  custom_fields
   birthdate
   ethnicity
   country
@@ -266,16 +277,21 @@ Once match tracking is stable, consider adding:
 }
 ```
 
+**Note:** `custom_fields` is of type `Map` in the Stash GraphQL API. It returns an object where keys are custom field names and values are the field values.
+
 **Mutation (PerformerUpdate)**
 ```graphql
-mutation PerformerUpdate($input: PerformerUpdateInput!) {
-  performerUpdate(input: $input) {
+mutation UpdatePerformerCustomFields($id: ID!, $rating: Int!, $fields: Map) {
+  performerUpdate(input: {
+    id: $id,
+    rating100: $rating,
+    custom_fields: {
+      partial: $fields
+    }
+  }) {
     id
     rating100
-    customFields {
-      key
-      value
-    }
+    custom_fields
   }
 }
 ```
@@ -283,12 +299,10 @@ mutation PerformerUpdate($input: PerformerUpdateInput!) {
 **Variables**
 ```json
 {
-  "input": {
-    "id": "performer-id",
-    "rating100": 68,
-    "customFields": [
-      { "key": "elo_matches", "value": "15" }
-    ]
+  "id": "performer-id",
+  "rating": 68,
+  "fields": {
+    "elo_matches": "15"
   }
 }
 ```
@@ -296,30 +310,30 @@ mutation PerformerUpdate($input: PerformerUpdateInput!) {
 ### Custom Field Structure
 
 **New/Empty Performer**
-```graphql
+```javascript
 {
   id: "123",
-  customFields: []
+  custom_fields: {}
 }
 ```
 
 **After First Match**
-```graphql
+```javascript
 {
   id: "123",
-  customFields: [
-    { key: "elo_matches", value: "1" }
-  ]
+  custom_fields: {
+    elo_matches: "1"
+  }
 }
 ```
 
 **After Multiple Matches**
-```graphql
+```javascript
 {
   id: "123",
-  customFields: [
-    { key: "elo_matches", value: "42" }
-  ]
+  custom_fields: {
+    elo_matches: "42"
+  }
 }
 ```
 
