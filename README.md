@@ -52,17 +52,18 @@ The plugin uses an ELO-inspired algorithm where:
 
 ### Match Count Tracking (NEW!)
 
-For performers, the plugin now tracks how many comparisons each performer has participated in using Stash's custom fields:
+For performers, the plugin now tracks how many comparisons each performer has participated in using Stash's native **customFields API** (requires Stash v0.27+):
 - **New performers** (<10 matches): Faster rating changes (K=16) to quickly find their accurate position
 - **Moderately established** (10-30 matches): Balanced rating changes (K=12)
 - **Well-established** (>50 matches): Smaller rating changes (K=8) for stable rankings
 
 This means new performers reach their accurate rating faster, while established performers' hard-earned rankings are better protected from random fluctuations.
 
-Match data is stored in the `details` field as JSON and is fully backward compatible with existing performers.
+Match data is stored using Stash's custom fields feature and is fully backward compatible with existing performers.
 
 ## Requirements
 
+- **Stash v0.27 or later** (for match count tracking feature)
 - At least 2 performers or images in your library (depending on which page you're on)
 
 ## Credits
