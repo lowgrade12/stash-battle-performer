@@ -65,6 +65,10 @@
     image_path
     rating100
     details
+    customFields {
+      key
+      value
+    }
     birthdate
     ethnicity
     country
@@ -561,7 +565,10 @@ async function fetchSceneCount() {
         performerUpdate(input: $input) {
           id
           rating100
-          details
+          customFields {
+            key
+            value
+          }
         }
       }
     `;
@@ -573,7 +580,10 @@ async function fetchSceneCount() {
     
     // Update match count if performer object provided
     if (performerObj && battleType === "performers") {
-      input.details = updatePerformerEloData(performerObj, 1);
+      const currentMatches = parsePerformerEloData(performerObj);
+      input.customFields = [
+        { key: "elo_matches", value: String(currentMatches + 1) }
+      ];
     }
     
     return await graphqlQuery(mutation, { input });
@@ -585,45 +595,24 @@ async function fetchSceneCount() {
   // ============================================
 
   /**
-   * Parse ELO match data from performer details JSON
+   * Parse ELO match data from performer customFields
    * @param {Object} performer - Performer object from GraphQL
-   * @returns {Object} { matches: number, detailsText: string }
+   * @returns {number} matches - Number of ELO matches played
    */
   function parsePerformerEloData(performer) {
-    if (!performer || !performer.details) {
-      return { matches: 0, detailsText: "" };
+    if (!performer || !performer.customFields) {
+      return 0;
     }
     
-    try {
-      const detailsObj = JSON.parse(performer.details);
-      return {
-        matches: detailsObj?.custom?.elo_matches || 0,
-        detailsText: detailsObj?.details || ""
-      };
-    } catch (e) {
-      // Legacy text details - preserve as-is
-      return { 
-        matches: 0, 
-        detailsText: performer.details 
-      };
+    // Find the elo_matches custom field
+    const eloField = performer.customFields.find(f => f.key === "elo_matches");
+    if (!eloField) {
+      return 0;
     }
-  }
-
-  /**
-   * Create updated details JSON with incremented match count
-   * @param {Object} performer - Performer object
-   * @param {number} increment - Amount to increment (default 1)
-   * @returns {string} JSON string for details field
-   */
-  function updatePerformerEloData(performer, increment = 1) {
-    const current = parsePerformerEloData(performer);
     
-    return JSON.stringify({
-      custom: {
-        elo_matches: current.matches + increment
-      },
-      details: current.detailsText
-    });
+    // Parse as integer, default to 0 if invalid
+    const matches = parseInt(eloField.value, 10);
+    return isNaN(matches) ? 0 : matches;
   }
 
   /**
@@ -673,10 +662,10 @@ async function fetchSceneCount() {
     let winnerMatchCount = null;
     let loserMatchCount = null;
     if (battleType === "performers" && winnerObj) {
-      winnerMatchCount = parsePerformerEloData(winnerObj).matches;
+      winnerMatchCount = parsePerformerEloData(winnerObj);
     }
     if (battleType === "performers" && loserObj) {
-      loserMatchCount = parsePerformerEloData(loserObj).matches;
+      loserMatchCount = parsePerformerEloData(loserObj);
     }
     
     let winnerGain = 0, loserLoss = 0;
