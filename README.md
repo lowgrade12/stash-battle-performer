@@ -7,10 +7,13 @@ A plugin for [Stash](https://stashapp.cc/) that uses an ELO-style rating system 
 A head-to-head comparison plugin that helps you rank performers and images.
 
 **Features:**
-- **Three Comparison Modes:**
-  - **Swiss** ⚖️ – Fair matchups between similarly-rated items. Both ratings adjust based on the outcome. For performers, recently matched performers are less likely to reappear (but not excluded) to reduce repetition.
-  - **Gauntlet** 🎯 – Place a random item in your rankings. They climb from the bottom, challenging each item above them until they lose, then settle into their final position.
-  - **Champion** 🏆 – Winner stays on. The winning item keeps battling until they're dethroned.
+- **Three Comparison Modes (Performers only):**
+  - **Swiss** ⚖️ – Fair matchups between similarly-rated items. Both ratings adjust based on the outcome. Recently matched performers are less likely to reappear (but not excluded) to reduce repetition.
+  - **Gauntlet** 🎯 – Place a random performer in your rankings. They climb from the bottom, challenging each performer above them until they lose, then settle into their final position.
+  - **Champion** 🏆 – Winner stays on. The winning performer keeps battling until they're dethroned.
+- **Swiss Mode for Images:**
+  - Images use Swiss mode exclusively for optimal performance with large libraries (177,000+ images tested).
+  - Intelligent sampling ensures fast comparisons even with massive image collections.
 
 ## Overview
 
@@ -39,9 +42,10 @@ Optional Step: Change Rating System Type to "Decimal" (Settings → Interface �
 ### For Images:
 1. Navigate to the **Images** page in Stash
 2. Click the floating 🔥 button in the bottom-right corner
-3. Choose your preferred comparison mode
-4. Click on an image (or use arrow keys) to pick the winner
-5. Watch your rankings evolve over time!
+3. Click on an image (or use arrow keys) to pick the winner
+4. Watch your rankings evolve over time!
+
+**Note:** Images use Swiss mode exclusively for optimal performance with large libraries. The mode selection (Swiss/Gauntlet/Champion) is only available for performers.
 
 ## How It Works
 

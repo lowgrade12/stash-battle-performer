@@ -1517,229 +1517,10 @@ async function fetchPerformerCount(performerFilter = {}) {
     };
   }
 
-  // Gauntlet mode: champion vs next challenger
-  async function fetchGauntletPairImages() {
-    const imagesQuery = `
-      query FindImagesByRating($filter: FindFilterType) {
-        findImages(filter: $filter) {
-          count
-          images {
-            ${IMAGE_FRAGMENT}
-          }
-        }
-      }
-    `;
-
-    // Get ALL images sorted by rating descending (highest first)
-    const result = await graphqlQuery(imagesQuery, {
-      filter: {
-        per_page: -1, // Get all
-        sort: "rating",
-        direction: "DESC"
-      }
-    });
-
-    const images = result.findImages.images || [];
-    totalItemsCount = images.length;
-    
-    if (images.length < 2) {
-      return { images: await fetchRandomImages(2), ranks: [null, null], isVictory: false, isFalling: false };
-    }
-
-    // Handle falling mode - find next opponent BELOW to test against
-    if (gauntletFalling && gauntletFallingItem) {
-      const fallingIndex = images.findIndex(s => s.id === gauntletFallingItem.id);
-      
-      // Find opponents below (higher index) that haven't been tested
-      const belowOpponents = images.filter((s, idx) => {
-        if (s.id === gauntletFallingItem.id) return false;
-        if (gauntletDefeated.includes(s.id)) return false;
-        return idx > fallingIndex; // Below in ranking
-      });
-      
-      if (belowOpponents.length === 0) {
-        // Hit the bottom - they're the lowest, place them here
-        const finalRank = images.length;
-        const finalRating = 1; // Lowest rating
-        updateImageRating(gauntletFallingItem.id, finalRating);
-        
-        return {
-          images: [gauntletFallingItem],
-          ranks: [finalRank],
-          isVictory: false,
-          isFalling: true,
-          isPlacement: true,
-          placementRank: finalRank,
-          placementRating: finalRating
-        };
-      } else {
-        // Get next opponent below (first one, closest to falling image)
-        const nextBelow = belowOpponents[0];
-        const nextBelowIndex = images.findIndex(s => s.id === nextBelow.id);
-        
-        // Update the falling image's rank for display
-        gauntletChampionRank = fallingIndex + 1;
-        
-        return {
-          images: [gauntletFallingItem, nextBelow],
-          ranks: [fallingIndex + 1, nextBelowIndex + 1],
-          isVictory: false,
-          isFalling: true
-        };
-      }
-    }
-
-    // If no champion yet, start with a random challenger vs the lowest rated image
-    if (!gauntletChampion) {
-      // Reset state
-      gauntletDefeated = [];
-      gauntletFalling = false;
-      gauntletFallingItem = null;
-      
-      // Pick random image as challenger
-      const randomIndex = Math.floor(Math.random() * images.length);
-      const challenger = images[randomIndex];
-      
-      // Start at the bottom - find lowest rated image that isn't the challenger
-      const lowestRated = images
-        .filter(s => s.id !== challenger.id)
-        .sort((a, b) => (a.rating100 || 0) - (b.rating100 || 0))[0];
-      
-      const lowestIndex = images.findIndex(s => s.id === lowestRated.id);
-      
-      // Challenger's current rank
-      gauntletChampionRank = randomIndex + 1;
-      
-      return { 
-        images: [challenger, lowestRated], 
-        ranks: [randomIndex + 1, lowestIndex + 1],
-        isVictory: false,
-        isFalling: false
-      };
-    }
-
-    // Champion exists - find next opponent they haven't defeated yet
-    const championIndex = images.findIndex(s => s.id === gauntletChampion.id);
-    
-    // Update champion rank (1-indexed, so +1)
-    gauntletChampionRank = championIndex + 1;
-    
-    // Find opponents above champion that haven't been defeated
-    const remainingOpponents = images.filter((s, idx) => {
-      if (s.id === gauntletChampion.id) return false;
-      if (gauntletDefeated.includes(s.id)) return false;
-      // Only images ranked higher (lower index) or same rating
-      return idx < championIndex || (s.rating100 || 0) >= (gauntletChampion.rating100 || 0);
-    });
-    
-    // If no opponents left, champion has truly won
-    if (remainingOpponents.length === 0) {
-      gauntletChampionRank = 1;
-      return { 
-        images: [gauntletChampion], 
-        ranks: [1],
-        isVictory: true,
-        isFalling: false
-      };
-    }
-    
-    // Pick the next highest-ranked remaining opponent with randomization
-    const nextOpponent = selectRandomOpponent(remainingOpponents);
-    const nextOpponentIndex = images.findIndex(s => s.id === nextOpponent.id);
-    
-    return { 
-      images: [gauntletChampion, nextOpponent], 
-      ranks: [championIndex + 1, nextOpponentIndex + 1],
-      isVictory: false,
-      isFalling: false
-    };
-  }
-
-  // Champion mode: like gauntlet but winner stays on (no falling)
-  async function fetchChampionPairImages() {
-    const imagesQuery = `
-      query FindImagesByRating($filter: FindFilterType) {
-        findImages(filter: $filter) {
-          count
-          images {
-            ${IMAGE_FRAGMENT}
-          }
-        }
-      }
-    `;
-
-    // Get ALL images sorted by rating descending (highest first)
-    const result = await graphqlQuery(imagesQuery, {
-      filter: {
-        per_page: -1,
-        sort: "rating",
-        direction: "DESC"
-      }
-    });
-
-    const images = result.findImages.images || [];
-    totalItemsCount = images.length;
-    
-    if (images.length < 2) {
-      return { images: await fetchRandomImages(2), ranks: [null, null], isVictory: false };
-    }
-
-    // If no champion yet, start with a random challenger vs the lowest rated image
-    if (!gauntletChampion) {
-      gauntletDefeated = [];
-      
-      // Pick random image as challenger
-      const randomIndex = Math.floor(Math.random() * images.length);
-      const challenger = images[randomIndex];
-      
-      // Start at the bottom - find lowest rated image that isn't the challenger
-      const lowestRated = images
-        .filter(s => s.id !== challenger.id)
-        .sort((a, b) => (a.rating100 || 0) - (b.rating100 || 0))[0];
-      
-      const lowestIndex = images.findIndex(s => s.id === lowestRated.id);
-      
-      gauntletChampionRank = randomIndex + 1;
-      
-      return { 
-        images: [challenger, lowestRated], 
-        ranks: [randomIndex + 1, lowestIndex + 1],
-        isVictory: false
-      };
-    }
-
-    // Champion exists - find next opponent they haven't defeated yet
-    const championIndex = images.findIndex(s => s.id === gauntletChampion.id);
-    
-    gauntletChampionRank = championIndex + 1;
-    
-    // Find opponents above champion that haven't been defeated
-    const remainingOpponents = images.filter((s, idx) => {
-      if (s.id === gauntletChampion.id) return false;
-      if (gauntletDefeated.includes(s.id)) return false;
-      return idx < championIndex || (s.rating100 || 0) >= (gauntletChampion.rating100 || 0);
-    });
-    
-    // If no opponents left, champion has won!
-    if (remainingOpponents.length === 0) {
-      gauntletChampionRank = 1;
-      return { 
-        images: [gauntletChampion], 
-        ranks: [1],
-        isVictory: true
-      };
-    }
-    
-    // Pick the next highest-ranked remaining opponent with randomization
-    const nextOpponent = selectRandomOpponent(remainingOpponents);
-    const nextOpponentIndex = images.findIndex(s => s.id === nextOpponent.id);
-    
-    return { 
-      images: [gauntletChampion, nextOpponent], 
-      ranks: [championIndex + 1, nextOpponentIndex + 1],
-      isVictory: false
-    };
-  }
+  // NOTE: Gauntlet and Champion modes for images have been removed.
+  // Images now use Swiss mode exclusively for optimal performance.
+  // The functions fetchGauntletPairImages() and fetchChampionPairImages() 
+  // have been removed as they are no longer needed.
 
   async function updateImageRating(imageId, newRating) {
     const mutation = `
@@ -1782,7 +1563,9 @@ async function fetchPerformerCount(performerFilter = {}) {
     if (battleType === "performers") {
       return await fetchGauntletPairPerformers();
     } else if (battleType === "images") {
-      return await fetchGauntletPairImages();
+      // Images use Swiss mode only - this should never be called
+      console.error("[HotOrNot] ERROR: Gauntlet mode called for images (not supported). Using Swiss mode as fallback.");
+      return await fetchSwissPairImages();
     } else {
       return await fetchGauntletPairScenes();
     }
@@ -1792,7 +1575,9 @@ async function fetchPerformerCount(performerFilter = {}) {
     if (battleType === "performers") {
       return await fetchChampionPairPerformers();
     } else if (battleType === "images") {
-      return await fetchChampionPairImages();
+      // Images use Swiss mode only - this should never be called
+      console.error("[HotOrNot] ERROR: Champion mode called for images (not supported). Using Swiss mode as fallback.");
+      return await fetchSwissPairImages();
     } else {
       return await fetchChampionPairScenes();
     }
@@ -2134,154 +1919,19 @@ async function fetchPerformerCount(performerFilter = {}) {
   }
 
   // ============================================
-  // IMAGE SELECTION FOR GAUNTLET
+  // IMAGE SELECTION (REMOVED)
   // ============================================
-
-  async function fetchImagesForSelection(count = 5) {
-    const totalImages = await fetchImageCount();
-    
-    if (totalImages < count) {
-      count = totalImages;
-    }
-
-    const imageQuery = `
-      query FindRandomImages($filter: FindFilterType) {
-        findImages(filter: $filter) {
-          images {
-            ${IMAGE_FRAGMENT}
-          }
-        }
-      }
-    `;
-
-    const result = await graphqlQuery(imageQuery, {
-      filter: {
-        per_page: Math.min(100, totalImages),
-        sort: "random"
-      }
-    });
-
-    const allImages = result.findImages.images || [];
-    const shuffled = allImages.sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, count);
-  }
-
-  function createImageSelectionCard(image) {
-    const imagePath = image.paths && image.paths.thumbnail ? image.paths.thumbnail : null;
-    const rating = image.rating100 ? `${image.rating100}/100` : "Unrated";
-    
-    return `
-      <div class="hon-selection-card" data-image-id="${image.id}">
-        <div class="hon-selection-image-container">
-          ${imagePath 
-            ? `<img class="hon-selection-image" src="${imagePath}" alt="Image #${image.id}" loading="lazy" />`
-            : `<div class="hon-selection-image hon-no-image">No Image</div>`
-          }
-        </div>
-        <div class="hon-selection-info">
-          <h4 class="hon-selection-name">Image #${image.id}</h4>
-          <div class="hon-selection-rating">${rating}</div>
-        </div>
-      </div>
-    `;
-  }
-
-  async function loadImageSelection() {
-    // Note: Reuses performer selection DOM elements for consistency with UI styling
-    const selectionContainer = document.getElementById("hon-performer-selection");
-    const imageList = document.getElementById("hon-performer-list");
-    
-    if (!selectionContainer || !imageList) return;
-
-    try {
-      const images = await fetchImagesForSelection(5);
-      
-      if (images.length === 0) {
-        imageList.innerHTML = '<div class="hon-error">No images available for selection.</div>';
-        return;
-      }
-
-      imageList.innerHTML = images.map(i => createImageSelectionCard(i)).join('');
-      
-      // Attach click handlers
-      imageList.querySelectorAll('.hon-selection-card').forEach((card) => {
-        card.addEventListener('click', () => {
-          const imageId = card.dataset.imageId;
-          const selectedImage = images.find(i => i.id.toString() === imageId);
-          if (selectedImage) {
-            startGauntletWithImage(selectedImage);
-          }
-        });
-      });
-    } catch (error) {
-      console.error("[HotOrNot] Error loading image selection:", error);
-      imageList.innerHTML = `<div class="hon-error">Error loading images: ${error.message}</div>`;
-    }
-  }
-
-  function startGauntletWithImage(image) {
-    // Set the selected image as the gauntlet champion
-    gauntletChampion = image;
-    gauntletWins = 0;
-    gauntletDefeated = [];
-    gauntletFalling = false;
-    gauntletFallingItem = null;
-    
-    // Hide the selection UI
-    const selectionContainer = document.getElementById("hon-performer-selection");
-    if (selectionContainer) {
-      selectionContainer.style.display = "none";
-    }
-    
-    // Show the comparison area and actions
-    const comparisonArea = document.getElementById("hon-comparison-area");
-    const actionsEl = document.querySelector(".hon-actions");
-    if (comparisonArea) comparisonArea.style.display = "";
-    if (actionsEl) actionsEl.style.display = "";
-    
-    // Load the first matchup
-    loadNewPair();
-  }
-
-  function showImageSelection() {
-    // Note: Reuses performer selection DOM elements for consistency with UI styling
-    const selectionContainer = document.getElementById("hon-performer-selection");
-    if (selectionContainer) {
-      selectionContainer.style.display = "block";
-      loadImageSelection();
-    }
-    
-    // Hide the comparison area until an image is selected
-    const comparisonArea = document.getElementById("hon-comparison-area");
-    const actionsEl = document.querySelector(".hon-actions");
-    if (comparisonArea) comparisonArea.style.display = "none";
-    if (actionsEl) actionsEl.style.display = "none";
-  }
-
-  function hideImageSelection() {
-    // Note: Reuses performer selection DOM elements for consistency with UI styling
-    const selectionContainer = document.getElementById("hon-performer-selection");
-    if (selectionContainer) {
-      selectionContainer.style.display = "none";
-    }
-    
-    // Show the comparison area
-    const comparisonArea = document.getElementById("hon-comparison-area");
-    const actionsEl = document.querySelector(".hon-actions");
-    if (comparisonArea) comparisonArea.style.display = "";
-    if (actionsEl) actionsEl.style.display = "";
-  }
+  // NOTE: Image selection for gauntlet mode has been removed.
+  // Images now use Swiss mode exclusively for optimal performance.
+  // Gauntlet and Champion modes are only available for performers.
 
   function createMainUI() {
     const itemType = battleType === "performers" ? "performers" : (battleType === "images" ? "images" : "scenes");
     const itemTypeSingular = battleType === "performers" ? "performer" : (battleType === "images" ? "image" : "scene");
     
-    return `
-      <div id="hotornot-container" class="hon-container">
-        <div class="hon-header">
-          <h1 class="hon-title">🔥 HotOrNot</h1>
-          <p class="hon-subtitle">Compare ${itemType} head-to-head to build your rankings</p>
-          
+    // For images, hide mode selection (only use Swiss mode)
+    const showModeToggle = battleType !== "images";
+    const modeToggleHTML = showModeToggle ? `
           <div class="hon-mode-toggle">
             <button class="hon-mode-btn ${currentMode === 'swiss' ? 'active' : ''}" data-mode="swiss">
               <span class="hon-mode-icon">⚖️</span>
@@ -2299,6 +1949,14 @@ async function fetchPerformerCount(performerFilter = {}) {
               <span class="hon-mode-desc">Winner stays on</span>
             </button>
           </div>
+    ` : '';
+    
+    return `
+      <div id="hotornot-container" class="hon-container">
+        <div class="hon-header">
+          <h1 class="hon-title">🔥 HotOrNot</h1>
+          <p class="hon-subtitle">Compare ${itemType} head-to-head to build your rankings</p>
+          ${modeToggleHTML}
         </div>
 
         <div id="hon-performer-selection" class="hon-performer-selection" style="display: none;">
@@ -2335,14 +1993,9 @@ async function fetchPerformerCount(performerFilter = {}) {
     if (!comparisonArea) return;
 
     // For gauntlet mode with performers, show selection if no champion yet
+    // Images don't use gauntlet/champion modes
     if (currentMode === "gauntlet" && battleType === "performers" && !gauntletChampion && !gauntletFalling) {
       showPerformerSelection();
-      return;
-    }
-
-    // For gauntlet mode with images, show selection if no champion yet
-    if (currentMode === "gauntlet" && battleType === "images" && !gauntletChampion && !gauntletFalling) {
-      showImageSelection();
       return;
     }
 
@@ -2355,7 +2008,12 @@ async function fetchPerformerCount(performerFilter = {}) {
       let items;
       let ranks = [null, null];
       
-      if (currentMode === "gauntlet") {
+      // Images always use Swiss mode
+      if (battleType === "images" || currentMode === "swiss") {
+        const swissResult = await fetchSwissPair();
+        items = swissResult.scenes || swissResult.performers || swissResult.images;
+        ranks = swissResult.ranks;
+      } else if (currentMode === "gauntlet") {
         const gauntletResult = await fetchGauntletPair();
         
         // Check for victory (champion reached #1)
@@ -2424,10 +2082,6 @@ async function fetchPerformerCount(performerFilter = {}) {
         
         items = championResult.scenes || championResult.performers || championResult.images;
         ranks = championResult.ranks;
-      } else {
-        const swissResult = await fetchSwissPair();
-        items = swissResult.scenes || swissResult.performers || swissResult.images;
-        ranks = swissResult.ranks;
       }
       
       if (items.length < 2) {
@@ -2497,10 +2151,10 @@ async function fetchPerformerCount(performerFilter = {}) {
         });
       });
       
-      // Update skip button state
+      // Update skip button state (only disabled for performers in gauntlet/champion mode)
       const skipBtn = document.querySelector("#hon-skip-btn");
       if (skipBtn) {
-        const disableSkip = (currentMode === "gauntlet" || currentMode === "champion") && gauntletChampion;
+        const disableSkip = battleType === "performers" && (currentMode === "gauntlet" || currentMode === "champion") && gauntletChampion;
         skipBtn.disabled = disableSkip;
         skipBtn.style.opacity = disableSkip ? "0.5" : "1";
         skipBtn.style.cursor = disableSkip ? "not-allowed" : "pointer";
@@ -2531,7 +2185,32 @@ async function fetchPerformerCount(performerFilter = {}) {
     // Get the loser's rank for #1 dethrone logic
     const loserRank = loserId === currentPair.left.id ? currentRanks.left : currentRanks.right;
 
-    // Handle gauntlet mode (champion tracking)
+    // Images always use Swiss mode logic (no gauntlet/champion)
+    if (battleType === "images") {
+      const winnerItem = winnerId === currentPair.left.id ? currentPair.left : currentPair.right;
+      const loserItem = loserId === currentPair.left.id ? currentPair.left : currentPair.right;
+      const { newWinnerRating, newLoserRating, winnerChange, loserChange } = handleComparison(
+        winnerId, loserId, winnerRating, loserRating, null, winnerItem, loserItem
+      );
+
+      // Visual feedback
+      winnerCard.classList.add("hon-winner");
+      if (loserCard) loserCard.classList.add("hon-loser");
+
+      // Show rating change animation
+      showRatingAnimation(winnerCard, winnerRating, newWinnerRating, winnerChange, true);
+      if (loserCard) {
+        showRatingAnimation(loserCard, loserRating, newLoserRating, loserChange, false);
+      }
+
+      // Load new pair after animation
+      setTimeout(() => {
+        loadNewPair();
+      }, 1500);
+      return;
+    }
+
+    // Handle gauntlet mode (champion tracking) - only for performers
     if (currentMode === "gauntlet") {
       const winnerItem = winnerId === currentPair.left.id ? currentPair.left : currentPair.right;
       const loserItem = loserId === currentPair.left.id ? currentPair.left : currentPair.right;
@@ -2656,7 +2335,7 @@ async function fetchPerformerCount(performerFilter = {}) {
       return;
     }
 
-    // For Swiss: Calculate and show rating changes
+    // For Swiss mode (performers only, images are handled above): Calculate and show rating changes
     const winnerItem = winnerId === currentPair.left.id ? currentPair.left : currentPair.right;
     const loserItem = loserId === currentPair.left.id ? currentPair.left : currentPair.right;
     const { newWinnerRating, newLoserRating, winnerChange, loserChange } = handleComparison(
@@ -2766,6 +2445,8 @@ function addFloatingButton() {
     const path = window.location.pathname;
     if (path === '/images' || path === '/images/') {
       battleType = "images";
+      // For images, always use Swiss mode
+      currentMode = "swiss";
     } else {
       battleType = "performers";
     }
@@ -2785,9 +2466,12 @@ function addFloatingButton() {
 
     document.body.appendChild(modal);
 
-    // Mode toggle buttons
+    // Mode toggle buttons (only shown for performers)
     modal.querySelectorAll(".hon-mode-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
+        // Images always stay in Swiss mode
+        if (battleType === "images") return;
+        
         const newMode = btn.dataset.mode;
         if (newMode !== currentMode) {
           currentMode = newMode;
@@ -2811,7 +2495,6 @@ function addFloatingButton() {
           // Hide performer/image selection if not in gauntlet mode
           if (currentMode !== "gauntlet") {
             hidePerformerSelection();
-            hideImageSelection();
           }
           
           // Load new pair in new mode
@@ -2824,14 +2507,14 @@ function addFloatingButton() {
     const skipBtn = modal.querySelector("#hon-skip-btn");
     if (skipBtn) {
       skipBtn.addEventListener("click", () => {
-        // In gauntlet/champion mode with active run, skip is disabled
-        if ((currentMode === "gauntlet" || currentMode === "champion") && gauntletChampion) {
+        // In gauntlet/champion mode with active run (performers only), skip is disabled
+        if (battleType === "performers" && (currentMode === "gauntlet" || currentMode === "champion") && gauntletChampion) {
           return;
         }
         if(disableChoice) return
         disableChoice = true;
-        // Reset state on skip
-        if (currentMode === "gauntlet" || currentMode === "champion") {
+        // Reset state on skip (only for performers)
+        if (battleType === "performers" && (currentMode === "gauntlet" || currentMode === "champion")) {
           gauntletChampion = null;
           gauntletWins = 0;
           gauntletDefeated = [];
@@ -2876,14 +2559,14 @@ function addFloatingButton() {
         const activeElement = document.activeElement;
         if (activeElement.tagName !== "INPUT" && activeElement.tagName !== "TEXTAREA") {
           e.preventDefault();
-          // Don't skip during active gauntlet/champion run
-          if ((currentMode === "gauntlet" || currentMode === "champion") && gauntletChampion) {
+          // Don't skip during active gauntlet/champion run (performers only)
+          if (battleType === "performers" && (currentMode === "gauntlet" || currentMode === "champion") && gauntletChampion) {
             return;
           }
           // TODO: Put these skip functionalities into ONE function
           if(disableChoice) return;
           disableChoice = true;
-          if (currentMode === "gauntlet" || currentMode === "champion") {
+          if (battleType === "performers" && (currentMode === "gauntlet" || currentMode === "champion")) {
             gauntletChampion = null;
             gauntletWins = 0;
             gauntletDefeated = [];
