@@ -12,7 +12,7 @@ All planned features have been implemented and tested.
 
 ### 1. Enhanced Statistics Tracking
 
-Performers now track comprehensive statistics in the `elo_stats` custom field:
+Performers now track comprehensive statistics in the `hotornot_stats` custom field:
 
 ```javascript
 {
@@ -224,11 +224,11 @@ With Approach 2 complete, the following features are now possible:
 
 ### Custom Field Format
 
-Stats are stored as a JSON string in the `elo_stats` custom field:
+Stats are stored as a JSON string in the `hotornot_stats` custom field:
 
 ```javascript
 custom_fields: {
-  elo_stats: '{"total_matches":42,"wins":28,"losses":14,...}'
+  hotornot_stats: '{"total_matches":42,"wins":28,"losses":14,...}'
 }
 ```
 
@@ -244,7 +244,7 @@ custom_fields: {
 
 ### GraphQL Mutation
 
-Uses partial update to only modify the `elo_stats` field:
+Uses partial update to only modify the `hotornot_stats` field:
 
 ```graphql
 mutation UpdatePerformerCustomFields($id: ID!, $rating: Int!, $fields: Map) {

@@ -77,7 +77,7 @@ Building on the match count tracking, the plugin now tracks detailed statistics 
 - Best Streak: 8 wins
 - Last Match: 2026-01-14
 
-Stats are stored in the `elo_stats` custom field and work seamlessly with all three comparison modes (Swiss, Gauntlet, Champion).
+Stats are stored in the `hotornot_stats` custom field and work seamlessly with all three comparison modes (Swiss, Gauntlet, Champion).
 
 **Technical Details:**
 - See [APPROACH2_IMPLEMENTATION.md](APPROACH2_IMPLEMENTATION.md) for implementation details

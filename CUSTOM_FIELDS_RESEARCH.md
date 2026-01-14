@@ -89,7 +89,7 @@ mutation PerformerUpdate($input: PerformerUpdateInput!) {
 {
   "input": {
     "id": "PERFORMER_ID",
-    "details": "{\"custom\": {\"elo_stats\": {...}}, \"details\": \"Bio text\"}"
+    "details": "{\"custom\": {\"hotornot_stats\": {...}}, \"details\": \"Bio text\"}"
   }
 }
 ```
@@ -133,7 +133,7 @@ mutation PerformerUpdate($input: PerformerUpdateInput!) {
 ```json
 {
   "custom": {
-    "elo_stats": {
+    "hotornot_stats": {
       "swiss": {
         "matches": 20,
         "wins": 12,
@@ -319,7 +319,7 @@ function getKFactor(currentRating, matchCount) {
 ```json
 {
   "custom": {
-    "elo_stats": {
+    "hotornot_stats": {
       "total_matches": 42,
       "wins": 28,
       "losses": 14,

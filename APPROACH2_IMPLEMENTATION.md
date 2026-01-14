@@ -19,7 +19,7 @@ This document describes the implementation of **Approach 2: Moderate - Stats Tra
 ```javascript
 {
   custom_fields: {
-    elo_stats: JSON.stringify({
+    hotornot_stats: JSON.stringify({
       total_matches: 42,
       wins: 28,
       losses: 14,
@@ -63,7 +63,7 @@ This document describes the implementation of **Approach 2: Moderate - Stats Tra
 
 Parses stats from custom_fields with backward compatibility:
 
-1. **First** tries to parse `elo_stats` (Approach 2)
+1. **First** tries to parse `hotornot_stats` (Approach 2)
 2. **Falls back** to `elo_matches` (Approach 1) 
 3. **Defaults** to empty stats if nothing found
 
@@ -96,7 +96,7 @@ Returns updated stats object.
 
 #### updatePerformerRating(performerId, newRating, performerObj)
 
-- Now saves complete stats as JSON in `elo_stats` custom field
+- Now saves complete stats as JSON in `hotornot_stats` custom field
 - Uses `performerObj._tempWon` flag to determine win/loss
 - Maintains backward compatibility
 
@@ -138,7 +138,7 @@ Performers with only `elo_matches` field:
 ### Fresh Installations
 
 - Performers without any custom fields start with empty stats
-- First comparison creates `elo_stats` field automatically
+- First comparison creates `hotornot_stats` field automatically
 
 ### Data Coexistence
 
@@ -146,8 +146,8 @@ Both formats can coexist safely:
 ```javascript
 {
   custom_fields: {
-    elo_matches: "15",      // Approach 1 (ignored if elo_stats exists)
-    elo_stats: "{...}"      // Approach 2 (takes precedence)
+    elo_matches: "15",      // Approach 1 (ignored if hotornot_stats exists)
+    hotornot_stats: "{...}"      // Approach 2 (takes precedence)
   }
 }
 ```
@@ -196,7 +196,7 @@ All tests passed ✅
 
 6. **Backward compatibility**
    - [ ] Performer with `elo_matches` only
-   - [ ] First match migrates to `elo_stats`
+   - [ ] First match migrates to `hotornot_stats`
    - [ ] Previous match count preserved
 
 ## Performance Impact
@@ -252,7 +252,7 @@ mutation UpdatePerformerCustomFields($id: ID!, $rating: Int!, $fields: Map) {
   "id": "performer-id",
   "rating": 68,
   "fields": {
-    "elo_stats": "{\"total_matches\":42,\"wins\":28,\"losses\":14,\"current_streak\":5,\"best_streak\":8,\"worst_streak\":-3,\"last_match\":\"2026-01-14T18:00:00Z\"}"
+    "hotornot_stats": "{\"total_matches\":42,\"wins\":28,\"losses\":14,\"current_streak\":5,\"best_streak\":8,\"worst_streak\":-3,\"last_match\":\"2026-01-14T18:00:00Z\"}"
   }
 }
 ```
@@ -283,8 +283,8 @@ interface EloStats {
 **Debug in console:**
 ```javascript
 // After a comparison:
-console.log(JSON.parse(currentPair.left.custom_fields.elo_stats));
-console.log(JSON.parse(currentPair.right.custom_fields.elo_stats));
+console.log(JSON.parse(currentPair.left.custom_fields.hotornot_stats));
+console.log(JSON.parse(currentPair.right.custom_fields.hotornot_stats));
 ```
 
 ### Streak Values Incorrect
