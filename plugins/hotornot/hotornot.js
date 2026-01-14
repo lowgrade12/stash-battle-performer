@@ -556,7 +556,7 @@ async function fetchSceneCount() {
     }
   }
 
-  async function updatePerformerRating(performerId, newRating, performerObj = null) {
+  async function updatePerformerRating(performerId, newRating, performerObj = null, won = null) {
     const mutation = `
       mutation UpdatePerformerCustomFields($id: ID!, $rating: Int!, $fields: Map) {
         performerUpdate(input: {
@@ -578,13 +578,16 @@ async function fetchSceneCount() {
       rating: Math.round(newRating)
     };
     
-    // Update match count if performer object provided
-    if (performerObj && battleType === "performers") {
-      const currentMatches = parsePerformerEloData(performerObj);
+    // Update stats if performer object and win/loss result provided
+    if (performerObj && battleType === "performers" && won !== null) {
+      const currentStats = parsePerformerEloData(performerObj);
       
-      // Use partial update to only update elo_matches field
+      // Update stats based on match outcome
+      const newStats = updatePerformerStats(currentStats, won);
+      
+      // Save stats as JSON string in custom field
       variables.fields = {
-        elo_matches: String(currentMatches + 1)
+        elo_stats: JSON.stringify(newStats)
       };
     }
     
@@ -599,22 +602,103 @@ async function fetchSceneCount() {
   /**
    * Parse ELO match data from performer custom_fields
    * @param {Object} performer - Performer object from GraphQL
-   * @returns {number} matches - Number of ELO matches played
+   * @returns {Object} stats - ELO statistics object with matches, wins, losses, etc.
    */
   function parsePerformerEloData(performer) {
     if (!performer || !performer.custom_fields) {
-      return 0;
+      return {
+        total_matches: 0,
+        wins: 0,
+        losses: 0,
+        current_streak: 0,
+        best_streak: 0,
+        worst_streak: 0,
+        last_match: null
+      };
     }
     
-    // custom_fields is now a Map object, access directly by key
+    // Check for Approach 2 stats (comprehensive tracking)
+    if (performer.custom_fields.elo_stats) {
+      try {
+        const stats = JSON.parse(performer.custom_fields.elo_stats);
+        return {
+          total_matches: stats.total_matches || 0,
+          wins: stats.wins || 0,
+          losses: stats.losses || 0,
+          current_streak: stats.current_streak || 0,
+          best_streak: stats.best_streak || 0,
+          worst_streak: stats.worst_streak || 0,
+          last_match: stats.last_match || null
+        };
+      } catch (e) {
+        console.warn(`[HotOrNot] Failed to parse elo_stats for performer ${performer.id}:`, e);
+      }
+    }
+    
+    // Fallback to Approach 1 (match count only) for backward compatibility
     const eloMatches = performer.custom_fields.elo_matches;
-    if (!eloMatches) {
-      return 0;
+    if (eloMatches) {
+      const matches = parseInt(eloMatches, 10);
+      return {
+        total_matches: isNaN(matches) ? 0 : matches,
+        wins: 0,
+        losses: 0,
+        current_streak: 0,
+        best_streak: 0,
+        worst_streak: 0,
+        last_match: null
+      };
     }
     
-    // Parse as integer, default to 0 if invalid
-    const matches = parseInt(eloMatches, 10);
-    return isNaN(matches) ? 0 : matches;
+    // No data - return empty stats
+    return {
+      total_matches: 0,
+      wins: 0,
+      losses: 0,
+      current_streak: 0,
+      best_streak: 0,
+      worst_streak: 0,
+      last_match: null
+    };
+  }
+
+  /**
+   * Update performer stats after a match
+   * @param {Object} currentStats - Current stats object from parsePerformerEloData
+   * @param {boolean} won - True if performer won, false if lost
+   * @returns {Object} Updated stats object
+   */
+  function updatePerformerStats(currentStats, won) {
+    const newStats = {
+      total_matches: currentStats.total_matches + 1,
+      wins: won ? currentStats.wins + 1 : currentStats.wins,
+      losses: won ? currentStats.losses : currentStats.losses + 1,
+      last_match: new Date().toISOString()
+    };
+    
+    // Calculate current streak
+    if (won) {
+      // Win: increment positive streak or start new positive streak
+      newStats.current_streak = currentStats.current_streak >= 0 
+        ? currentStats.current_streak + 1 
+        : 1;
+    } else {
+      // Loss: decrement negative streak or start new negative streak
+      newStats.current_streak = currentStats.current_streak <= 0 
+        ? currentStats.current_streak - 1 
+        : -1;
+    }
+    
+    // Update best/worst streaks
+    if (newStats.current_streak > 0) {
+      newStats.best_streak = Math.max(currentStats.best_streak, newStats.current_streak);
+      newStats.worst_streak = currentStats.worst_streak;
+    } else {
+      newStats.best_streak = currentStats.best_streak;
+      newStats.worst_streak = Math.min(currentStats.worst_streak, newStats.current_streak);
+    }
+    
+    return newStats;
   }
 
   /**
@@ -654,6 +738,39 @@ async function fetchSceneCount() {
     }
   }
 
+  /**
+   * Check if a performer is an active participant in gauntlet/champion mode
+   * Active participants are those whose stats should be tracked
+   * @param {string} performerId - ID of the performer to check
+   * @param {number|null} performerRank - Rank of the performer (null if not ranked)
+   * @returns {boolean} True if performer's stats should be tracked
+   */
+  function isActiveParticipant(performerId, performerRank) {
+    // In Swiss mode, all participants are active
+    if (currentMode !== "gauntlet" && currentMode !== "champion") {
+      return true;
+    }
+    
+    // Check if this is the champion
+    const isChampion = gauntletChampion && performerId === gauntletChampion.id;
+    
+    // Check if this is the falling performer
+    const isFalling = gauntletFalling && gauntletFallingItem && performerId === gauntletFallingItem.id;
+    
+    // Champion or falling performer are always active
+    if (isChampion || isFalling) {
+      return true;
+    }
+    
+    // Defender at rank #1 who is being challenged is also active (they can lose rating)
+    if (performerRank === 1) {
+      return true;
+    }
+    
+    // All other defenders are not active (they're just benchmarks)
+    return false;
+  }
+
   function handleComparison(winnerId, loserId, winnerCurrentRating, loserCurrentRating, loserRank = null, winnerObj = null, loserObj = null) {
     const winnerRating = winnerCurrentRating || 50;
     const loserRating = loserCurrentRating || 50;
@@ -664,10 +781,12 @@ async function fetchSceneCount() {
     let winnerMatchCount = null;
     let loserMatchCount = null;
     if (battleType === "performers" && winnerObj) {
-      winnerMatchCount = parsePerformerEloData(winnerObj);
+      const winnerStats = parsePerformerEloData(winnerObj);
+      winnerMatchCount = winnerStats.total_matches;
     }
     if (battleType === "performers" && loserObj) {
-      loserMatchCount = parsePerformerEloData(loserObj);
+      const loserStats = parsePerformerEloData(loserObj);
+      loserMatchCount = loserStats.total_matches;
     }
     
     let winnerGain = 0, loserLoss = 0;
@@ -715,9 +834,19 @@ async function fetchSceneCount() {
     const winnerChange = newWinnerRating - winnerRating;
     const loserChange = newLoserRating - loserRating;
     
+    // Determine which participants should have stats tracked
+    const winnerRank = winnerId === currentPair.left?.id ? currentRanks.left : currentRanks.right;
+    const shouldTrackWinner = battleType === "performers" && isActiveParticipant(winnerId, winnerRank);
+    const shouldTrackLoser = battleType === "performers" && isActiveParticipant(loserId, loserRank);
+    
     // Update items in Stash (only if changed)
-    if (winnerChange !== 0) updateItemRating(winnerId, newWinnerRating, winnerObj);
-    if (loserChange !== 0) updateItemRating(loserId, newLoserRating, loserObj);
+    // Pass win/loss status for stats tracking
+    if (winnerChange !== 0) {
+      updateItemRating(winnerId, newWinnerRating, shouldTrackWinner ? winnerObj : null, shouldTrackWinner ? true : null);
+    }
+    if (loserChange !== 0) {
+      updateItemRating(loserId, newLoserRating, shouldTrackLoser ? loserObj : null, shouldTrackLoser ? false : null);
+    }
     
     return { newWinnerRating, newLoserRating, winnerChange, loserChange };
   }
@@ -1501,9 +1630,9 @@ async function fetchPerformerCount(performerFilter = {}) {
     }
   }
 
-  async function updateItemRating(itemId, newRating, itemObj = null) {
+  async function updateItemRating(itemId, newRating, itemObj = null, won = null) {
     if (battleType === "performers") {
-      return await updatePerformerRating(itemId, newRating, itemObj);
+      return await updatePerformerRating(itemId, newRating, itemObj, won);
     } else if (battleType === "images") {
       return await updateImageRating(itemId, newRating);
     } else {
@@ -2100,7 +2229,8 @@ async function fetchPerformerCount(performerFilter = {}) {
           // Falling scene won - found their floor!
           // Set their rating to just above the scene they beat
           const finalRating = Math.min(100, loserRating + 1);
-          updateItemRating(gauntletFallingItem.id, finalRating, gauntletFallingItem);
+          // Track this as a win for the falling performer
+          updateItemRating(gauntletFallingItem.id, finalRating, gauntletFallingItem, true);
           
           // Final rank is one above the opponent (we beat them, so we're above them)
           const opponentRank = loserId === currentPair.left.id ? currentRanks.left : currentRanks.right;

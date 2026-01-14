@@ -61,6 +61,29 @@ This means new performers reach their accurate rating faster, while established 
 
 Match data is stored using Stash's custom fields feature and is fully backward compatible with existing performers.
 
+### Comprehensive Stats Tracking (NEW! - Approach 2)
+
+Building on the match count tracking, the plugin now tracks detailed statistics for each performer:
+
+- **Win/Loss Records**: See exactly how many matches each performer has won or lost
+- **Win Streaks**: Track current streaks, best win streaks, and worst loss streaks
+- **Match History**: Timestamp of last comparison
+- **Smart Upgrades**: Automatically upgrades from basic match count to comprehensive stats
+
+**Example Stats:**
+- Total Matches: 42
+- Win-Loss Record: 28-14 (66.7% win rate)
+- Current Streak: 🔥 5 wins
+- Best Streak: 8 wins
+- Last Match: 2026-01-14
+
+Stats are stored in the `elo_stats` custom field and work seamlessly with all three comparison modes (Swiss, Gauntlet, Champion).
+
+**Technical Details:**
+- See [APPROACH2_IMPLEMENTATION.md](APPROACH2_IMPLEMENTATION.md) for implementation details
+- See [APPROACH2_SUMMARY.md](APPROACH2_SUMMARY.md) for overview and testing results
+- See [CUSTOM_FIELDS_RESEARCH.md](CUSTOM_FIELDS_RESEARCH.md) for research and design decisions
+
 ## Requirements
 
 - **Stash v0.27 or later** (for match count tracking feature)
