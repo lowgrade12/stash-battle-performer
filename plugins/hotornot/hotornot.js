@@ -578,14 +578,25 @@ async function fetchSceneCount() {
       rating: Math.round(newRating)
     };
     
-    // Update match count if performer object provided
+    // Update stats if performer object provided
     if (performerObj && battleType === "performers") {
-      const currentMatches = parsePerformerEloData(performerObj);
+      const currentStats = parsePerformerEloData(performerObj);
       
-      // Use partial update to only update elo_matches field
+      // Determine if this was a win or loss based on rating change
+      // This is a simplification - the actual win/loss will be set by handleComparison
+      // For now, we'll use a temporary field that will be set externally
+      const won = performerObj._tempWon || false;
+      
+      // Update stats
+      const newStats = updatePerformerStats(currentStats, won);
+      
+      // Use partial update to save stats as JSON string
       variables.fields = {
-        elo_matches: String(currentMatches + 1)
+        elo_stats: JSON.stringify(newStats)
       };
+      
+      // Clean up temporary field
+      delete performerObj._tempWon;
     }
     
     return await graphqlQuery(mutation, variables);
@@ -599,22 +610,103 @@ async function fetchSceneCount() {
   /**
    * Parse ELO match data from performer custom_fields
    * @param {Object} performer - Performer object from GraphQL
-   * @returns {number} matches - Number of ELO matches played
+   * @returns {Object} stats - ELO statistics object with matches, wins, losses, etc.
    */
   function parsePerformerEloData(performer) {
     if (!performer || !performer.custom_fields) {
-      return 0;
+      return {
+        total_matches: 0,
+        wins: 0,
+        losses: 0,
+        current_streak: 0,
+        best_streak: 0,
+        worst_streak: 0,
+        last_match: null
+      };
     }
     
-    // custom_fields is now a Map object, access directly by key
+    // Check for Approach 2 stats (comprehensive tracking)
+    if (performer.custom_fields.elo_stats) {
+      try {
+        const stats = JSON.parse(performer.custom_fields.elo_stats);
+        return {
+          total_matches: stats.total_matches || 0,
+          wins: stats.wins || 0,
+          losses: stats.losses || 0,
+          current_streak: stats.current_streak || 0,
+          best_streak: stats.best_streak || 0,
+          worst_streak: stats.worst_streak || 0,
+          last_match: stats.last_match || null
+        };
+      } catch (e) {
+        console.warn(`[HotOrNot] Failed to parse elo_stats for performer ${performer.id}:`, e);
+      }
+    }
+    
+    // Fallback to Approach 1 (match count only) for backward compatibility
     const eloMatches = performer.custom_fields.elo_matches;
-    if (!eloMatches) {
-      return 0;
+    if (eloMatches) {
+      const matches = parseInt(eloMatches, 10);
+      return {
+        total_matches: isNaN(matches) ? 0 : matches,
+        wins: 0,
+        losses: 0,
+        current_streak: 0,
+        best_streak: 0,
+        worst_streak: 0,
+        last_match: null
+      };
     }
     
-    // Parse as integer, default to 0 if invalid
-    const matches = parseInt(eloMatches, 10);
-    return isNaN(matches) ? 0 : matches;
+    // No data - return empty stats
+    return {
+      total_matches: 0,
+      wins: 0,
+      losses: 0,
+      current_streak: 0,
+      best_streak: 0,
+      worst_streak: 0,
+      last_match: null
+    };
+  }
+
+  /**
+   * Update performer stats after a match
+   * @param {Object} currentStats - Current stats object from parsePerformerEloData
+   * @param {boolean} won - True if performer won, false if lost
+   * @returns {Object} Updated stats object
+   */
+  function updatePerformerStats(currentStats, won) {
+    const newStats = {
+      total_matches: currentStats.total_matches + 1,
+      wins: won ? currentStats.wins + 1 : currentStats.wins,
+      losses: won ? currentStats.losses : currentStats.losses + 1,
+      last_match: new Date().toISOString()
+    };
+    
+    // Calculate current streak
+    if (won) {
+      // Win: increment positive streak or start new positive streak
+      newStats.current_streak = currentStats.current_streak >= 0 
+        ? currentStats.current_streak + 1 
+        : 1;
+    } else {
+      // Loss: decrement negative streak or start new negative streak
+      newStats.current_streak = currentStats.current_streak <= 0 
+        ? currentStats.current_streak - 1 
+        : -1;
+    }
+    
+    // Update best/worst streaks
+    if (newStats.current_streak > 0) {
+      newStats.best_streak = Math.max(currentStats.best_streak, newStats.current_streak);
+      newStats.worst_streak = currentStats.worst_streak;
+    } else {
+      newStats.best_streak = currentStats.best_streak;
+      newStats.worst_streak = Math.min(currentStats.worst_streak, newStats.current_streak);
+    }
+    
+    return newStats;
   }
 
   /**
@@ -664,10 +756,12 @@ async function fetchSceneCount() {
     let winnerMatchCount = null;
     let loserMatchCount = null;
     if (battleType === "performers" && winnerObj) {
-      winnerMatchCount = parsePerformerEloData(winnerObj);
+      const winnerStats = parsePerformerEloData(winnerObj);
+      winnerMatchCount = winnerStats.total_matches;
     }
     if (battleType === "performers" && loserObj) {
-      loserMatchCount = parsePerformerEloData(loserObj);
+      const loserStats = parsePerformerEloData(loserObj);
+      loserMatchCount = loserStats.total_matches;
     }
     
     let winnerGain = 0, loserLoss = 0;
@@ -714,6 +808,14 @@ async function fetchSceneCount() {
     
     const winnerChange = newWinnerRating - winnerRating;
     const loserChange = newLoserRating - loserRating;
+    
+    // Set temporary win/loss flags for stats tracking
+    if (winnerObj && battleType === "performers") {
+      winnerObj._tempWon = true;
+    }
+    if (loserObj && battleType === "performers") {
+      loserObj._tempWon = false;
+    }
     
     // Update items in Stash (only if changed)
     if (winnerChange !== 0) updateItemRating(winnerId, newWinnerRating, winnerObj);
