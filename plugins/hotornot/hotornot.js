@@ -158,11 +158,12 @@ async function fetchSceneCount() {
     const scene1 = scenes[randomIndex];
     const rating1 = scene1.rating100 || 50;
 
-    // Find scenes within ±15 rating points
+    // Find scenes within adaptive rating window (tighter for larger pools)
+    const matchWindow = scenes.length > 50 ? 10 : scenes.length > 20 ? 15 : 25;
     const similarScenes = scenes.filter(s => {
       if (s.id === scene1.id) return false;
       const rating = s.rating100 || 50;
-      return Math.abs(rating - rating1) <= 15;
+      return Math.abs(rating - rating1) <= matchWindow;
     });
 
     let scene2;
@@ -576,6 +577,20 @@ async function fetchSceneCount() {
   // RATING LOGIC
   // ============================================
 
+  function getKFactor(currentRating) {
+    // Items near the default rating (50) are likely less established
+    // Items far from 50 have likely had more comparisons
+    const distanceFromDefault = Math.abs(currentRating - 50);
+    
+    if (distanceFromDefault < 10) {
+      return 12;  // Higher K for unproven items near default
+    } else if (distanceFromDefault < 25) {
+      return 10;  // Medium K for moderately established items
+    } else {
+      return 8;   // Lower K for well-established items
+    }
+  }
+
   function handleComparison(winnerId, loserId, winnerCurrentRating, loserCurrentRating, loserRank = null) {
     const winnerRating = winnerCurrentRating || 50;
     const loserRating = loserCurrentRating || 50;
@@ -594,14 +609,14 @@ async function fetchSceneCount() {
       const isFallingLoser = gauntletFalling && gauntletFallingItem && loserId === gauntletFallingItem.id;
       
       const expectedWinner = 1 / (1 + Math.pow(10, ratingDiff / 40));
-      const kFactor = 8;
+      const kFactor = getKFactor(winnerRating);
       
       // Only the active scene (champion or falling) gets rating changes
       if (isChampionWinner || isFallingWinner) {
-        winnerGain = Math.max(1, Math.round(kFactor * (1 - expectedWinner)));
+        winnerGain = Math.max(0, Math.round(kFactor * (1 - expectedWinner)));
       }
       if (isChampionLoser || isFallingLoser) {
-        loserLoss = Math.max(1, Math.round(kFactor * expectedWinner));
+        loserLoss = Math.max(0, Math.round(kFactor * expectedWinner));
       }
       
       // Special case: if defender was rank #1 and lost, drop their rating by 1
@@ -611,10 +626,10 @@ async function fetchSceneCount() {
     } else {
       // Swiss mode: True ELO - both change based on expected outcome
       const expectedWinner = 1 / (1 + Math.pow(10, ratingDiff / 40));
-      const kFactor = 8;
+      const kFactor = getKFactor(winnerRating);
       
-      winnerGain = Math.max(1, Math.round(kFactor * (1 - expectedWinner)));
-      loserLoss = Math.max(1, Math.round(kFactor * expectedWinner));
+      winnerGain = Math.max(0, Math.round(kFactor * (1 - expectedWinner)));
+      loserLoss = Math.max(0, Math.round(kFactor * expectedWinner));
     }
     
     const newWinnerRating = Math.min(100, Math.max(1, winnerRating + winnerGain));
@@ -754,11 +769,12 @@ async function fetchPerformerCount(performerFilter = {}) {
     const performer1 = performers[randomIndex];
     const rating1 = performer1.rating100 || 50;
 
-    // Find performers within ±15 rating points
+    // Find performers within adaptive rating window (tighter for larger pools)
+    const matchWindow = performers.length > 50 ? 10 : performers.length > 20 ? 15 : 25;
     const similarPerformers = performers.filter(s => {
       if (s.id === performer1.id) return false;
       const rating = s.rating100 || 50;
-      return Math.abs(rating - rating1) <= 15;
+      return Math.abs(rating - rating1) <= matchWindow;
     });
 
     let performer2;
@@ -1095,11 +1111,12 @@ async function fetchPerformerCount(performerFilter = {}) {
     const image1 = images[randomIndex];
     const rating1 = image1.rating100 || 50;
 
-    // Find images within ±15 rating points
+    // Find images within adaptive rating window (tighter for larger pools)
+    const matchWindow = images.length > 50 ? 10 : images.length > 20 ? 15 : 25;
     const similarImages = images.filter(s => {
       if (s.id === image1.id) return false;
       const rating = s.rating100 || 50;
-      return Math.abs(rating - rating1) <= 15;
+      return Math.abs(rating - rating1) <= matchWindow;
     });
 
     let image2;
