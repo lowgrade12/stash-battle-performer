@@ -2276,12 +2276,9 @@ async function fetchPerformerCount(performerFilter = {}) {
     const itemType = battleType === "performers" ? "performers" : (battleType === "images" ? "images" : "scenes");
     const itemTypeSingular = battleType === "performers" ? "performer" : (battleType === "images" ? "image" : "scene");
     
-    return `
-      <div id="hotornot-container" class="hon-container">
-        <div class="hon-header">
-          <h1 class="hon-title">🔥 HotOrNot</h1>
-          <p class="hon-subtitle">Compare ${itemType} head-to-head to build your rankings</p>
-          
+    // For images, hide mode selection (only use Swiss mode)
+    const showModeToggle = battleType !== "images";
+    const modeToggleHTML = showModeToggle ? `
           <div class="hon-mode-toggle">
             <button class="hon-mode-btn ${currentMode === 'swiss' ? 'active' : ''}" data-mode="swiss">
               <span class="hon-mode-icon">⚖️</span>
@@ -2299,6 +2296,14 @@ async function fetchPerformerCount(performerFilter = {}) {
               <span class="hon-mode-desc">Winner stays on</span>
             </button>
           </div>
+    ` : '';
+    
+    return `
+      <div id="hotornot-container" class="hon-container">
+        <div class="hon-header">
+          <h1 class="hon-title">🔥 HotOrNot</h1>
+          <p class="hon-subtitle">Compare ${itemType} head-to-head to build your rankings</p>
+          ${modeToggleHTML}
         </div>
 
         <div id="hon-performer-selection" class="hon-performer-selection" style="display: none;">
@@ -2335,14 +2340,9 @@ async function fetchPerformerCount(performerFilter = {}) {
     if (!comparisonArea) return;
 
     // For gauntlet mode with performers, show selection if no champion yet
+    // Images don't use gauntlet/champion modes
     if (currentMode === "gauntlet" && battleType === "performers" && !gauntletChampion && !gauntletFalling) {
       showPerformerSelection();
-      return;
-    }
-
-    // For gauntlet mode with images, show selection if no champion yet
-    if (currentMode === "gauntlet" && battleType === "images" && !gauntletChampion && !gauntletFalling) {
-      showImageSelection();
       return;
     }
 
@@ -2355,7 +2355,12 @@ async function fetchPerformerCount(performerFilter = {}) {
       let items;
       let ranks = [null, null];
       
-      if (currentMode === "gauntlet") {
+      // Images always use Swiss mode
+      if (battleType === "images" || currentMode === "swiss") {
+        const swissResult = await fetchSwissPair();
+        items = swissResult.scenes || swissResult.performers || swissResult.images;
+        ranks = swissResult.ranks;
+      } else if (currentMode === "gauntlet") {
         const gauntletResult = await fetchGauntletPair();
         
         // Check for victory (champion reached #1)
@@ -2424,10 +2429,6 @@ async function fetchPerformerCount(performerFilter = {}) {
         
         items = championResult.scenes || championResult.performers || championResult.images;
         ranks = championResult.ranks;
-      } else {
-        const swissResult = await fetchSwissPair();
-        items = swissResult.scenes || swissResult.performers || swissResult.images;
-        ranks = swissResult.ranks;
       }
       
       if (items.length < 2) {
@@ -2497,10 +2498,10 @@ async function fetchPerformerCount(performerFilter = {}) {
         });
       });
       
-      // Update skip button state
+      // Update skip button state (only disabled for performers in gauntlet/champion mode)
       const skipBtn = document.querySelector("#hon-skip-btn");
       if (skipBtn) {
-        const disableSkip = (currentMode === "gauntlet" || currentMode === "champion") && gauntletChampion;
+        const disableSkip = battleType === "performers" && (currentMode === "gauntlet" || currentMode === "champion") && gauntletChampion;
         skipBtn.disabled = disableSkip;
         skipBtn.style.opacity = disableSkip ? "0.5" : "1";
         skipBtn.style.cursor = disableSkip ? "not-allowed" : "pointer";
@@ -2531,7 +2532,32 @@ async function fetchPerformerCount(performerFilter = {}) {
     // Get the loser's rank for #1 dethrone logic
     const loserRank = loserId === currentPair.left.id ? currentRanks.left : currentRanks.right;
 
-    // Handle gauntlet mode (champion tracking)
+    // Images always use Swiss mode logic (no gauntlet/champion)
+    if (battleType === "images") {
+      const winnerItem = winnerId === currentPair.left.id ? currentPair.left : currentPair.right;
+      const loserItem = loserId === currentPair.left.id ? currentPair.left : currentPair.right;
+      const { newWinnerRating, newLoserRating, winnerChange, loserChange } = handleComparison(
+        winnerId, loserId, winnerRating, loserRating, null, winnerItem, loserItem
+      );
+
+      // Visual feedback
+      winnerCard.classList.add("hon-winner");
+      if (loserCard) loserCard.classList.add("hon-loser");
+
+      // Show rating change animation
+      showRatingAnimation(winnerCard, winnerRating, newWinnerRating, winnerChange, true);
+      if (loserCard) {
+        showRatingAnimation(loserCard, loserRating, newLoserRating, loserChange, false);
+      }
+
+      // Load new pair after animation
+      setTimeout(() => {
+        loadNewPair();
+      }, 1500);
+      return;
+    }
+
+    // Handle gauntlet mode (champion tracking) - only for performers
     if (currentMode === "gauntlet") {
       const winnerItem = winnerId === currentPair.left.id ? currentPair.left : currentPair.right;
       const loserItem = loserId === currentPair.left.id ? currentPair.left : currentPair.right;
@@ -2656,7 +2682,7 @@ async function fetchPerformerCount(performerFilter = {}) {
       return;
     }
 
-    // For Swiss: Calculate and show rating changes
+    // For Swiss mode (performers only, images are handled above): Calculate and show rating changes
     const winnerItem = winnerId === currentPair.left.id ? currentPair.left : currentPair.right;
     const loserItem = loserId === currentPair.left.id ? currentPair.left : currentPair.right;
     const { newWinnerRating, newLoserRating, winnerChange, loserChange } = handleComparison(
@@ -2766,6 +2792,8 @@ function addFloatingButton() {
     const path = window.location.pathname;
     if (path === '/images' || path === '/images/') {
       battleType = "images";
+      // For images, always use Swiss mode
+      currentMode = "swiss";
     } else {
       battleType = "performers";
     }
@@ -2785,9 +2813,12 @@ function addFloatingButton() {
 
     document.body.appendChild(modal);
 
-    // Mode toggle buttons
+    // Mode toggle buttons (only shown for performers)
     modal.querySelectorAll(".hon-mode-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
+        // Images always stay in Swiss mode
+        if (battleType === "images") return;
+        
         const newMode = btn.dataset.mode;
         if (newMode !== currentMode) {
           currentMode = newMode;
@@ -2811,7 +2842,6 @@ function addFloatingButton() {
           // Hide performer/image selection if not in gauntlet mode
           if (currentMode !== "gauntlet") {
             hidePerformerSelection();
-            hideImageSelection();
           }
           
           // Load new pair in new mode
@@ -2824,14 +2854,14 @@ function addFloatingButton() {
     const skipBtn = modal.querySelector("#hon-skip-btn");
     if (skipBtn) {
       skipBtn.addEventListener("click", () => {
-        // In gauntlet/champion mode with active run, skip is disabled
-        if ((currentMode === "gauntlet" || currentMode === "champion") && gauntletChampion) {
+        // In gauntlet/champion mode with active run (performers only), skip is disabled
+        if (battleType === "performers" && (currentMode === "gauntlet" || currentMode === "champion") && gauntletChampion) {
           return;
         }
         if(disableChoice) return
         disableChoice = true;
-        // Reset state on skip
-        if (currentMode === "gauntlet" || currentMode === "champion") {
+        // Reset state on skip (only for performers)
+        if (battleType === "performers" && (currentMode === "gauntlet" || currentMode === "champion")) {
           gauntletChampion = null;
           gauntletWins = 0;
           gauntletDefeated = [];
@@ -2876,14 +2906,14 @@ function addFloatingButton() {
         const activeElement = document.activeElement;
         if (activeElement.tagName !== "INPUT" && activeElement.tagName !== "TEXTAREA") {
           e.preventDefault();
-          // Don't skip during active gauntlet/champion run
-          if ((currentMode === "gauntlet" || currentMode === "champion") && gauntletChampion) {
+          // Don't skip during active gauntlet/champion run (performers only)
+          if (battleType === "performers" && (currentMode === "gauntlet" || currentMode === "champion") && gauntletChampion) {
             return;
           }
           // TODO: Put these skip functionalities into ONE function
           if(disableChoice) return;
           disableChoice = true;
-          if (currentMode === "gauntlet" || currentMode === "champion") {
+          if (battleType === "performers" && (currentMode === "gauntlet" || currentMode === "champion")) {
             gauntletChampion = null;
             gauntletWins = 0;
             gauntletDefeated = [];
