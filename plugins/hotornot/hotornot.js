@@ -971,7 +971,15 @@ async function fetchPerformerCount(performerFilter = {}) {
     }
     
     try {
-      const lastMatchTime = new Date(stats.last_match).getTime();
+      const lastMatchDate = new Date(stats.last_match);
+      
+      // Check for invalid date
+      if (isNaN(lastMatchDate.getTime())) {
+        console.warn(`[HotOrNot] Invalid last_match date for performer ${performer.id}`);
+        return 1.0;
+      }
+      
+      const lastMatchTime = lastMatchDate.getTime();
       const now = Date.now();
       const hoursSinceMatch = (now - lastMatchTime) / (1000 * 60 * 60);
       
@@ -1012,6 +1020,12 @@ async function fetchPerformerCount(performerFilter = {}) {
     
     if (items.length !== weights.length) {
       console.error("[HotOrNot] weightedRandomSelect: items and weights arrays have different lengths");
+      return null;
+    }
+    
+    // Validate that all weights are numeric
+    if (!weights.every(w => typeof w === 'number' && !isNaN(w))) {
+      console.error("[HotOrNot] weightedRandomSelect: weights array contains non-numeric values");
       return null;
     }
     
@@ -1066,46 +1080,52 @@ async function fetchPerformerCount(performerFilter = {}) {
       return { performers: await fetchRandomPerformers(2), ranks: [null, null] };
     }
 
+    // Calculate weights once and cache them with indices
+    const performersWithWeights = performers.map((p, idx) => ({
+      performer: p,
+      weight: getRecencyWeight(p),
+      index: idx
+    }));
+    
     // Pick a random performer, weighted by recency to avoid repetition
-    const weights = performers.map(p => getRecencyWeight(p));
-    const performer1 = weightedRandomSelect(performers, weights);
+    const weights = performersWithWeights.map(pw => pw.weight);
+    const selected1 = weightedRandomSelect(performersWithWeights, weights);
     
     // Fallback to pure random if weighted selection fails
-    if (!performer1) {
-      const randomIndex = Math.floor(Math.random() * performers.length);
-      const performer1Fallback = performers[randomIndex];
+    if (!selected1) {
       console.warn("[HotOrNot] Weighted selection failed, falling back to random");
-      return { 
-        performers: [performer1Fallback, performers.filter(p => p.id !== performer1Fallback.id)[0]], 
-        ranks: [randomIndex + 1, null] 
-      };
+      return { performers: await fetchRandomPerformers(2), ranks: [null, null] };
     }
     
-    const randomIndex = performers.findIndex(p => p.id === performer1.id);
+    const performer1 = selected1.performer;
+    const randomIndex = selected1.index;
     const rating1 = performer1.rating100 || 50;
 
     // Find performers within adaptive rating window (tighter for larger pools)
     const matchWindow = performers.length > 50 ? 10 : performers.length > 20 ? 15 : 25;
-    const similarPerformers = performers.filter(s => {
-      if (s.id === performer1.id) return false;
-      const rating = s.rating100 || 50;
+    const similarPerformersWithWeights = performersWithWeights.filter(pw => {
+      if (pw.performer.id === performer1.id) return false;
+      const rating = pw.performer.rating100 || 50;
       return Math.abs(rating - rating1) <= matchWindow;
     });
 
     let performer2;
     let performer2Index;
-    if (similarPerformers.length > 0) {
-      // Pick from similar-rated performers, weighted by recency
-      const similarWeights = similarPerformers.map(p => getRecencyWeight(p));
-      performer2 = weightedRandomSelect(similarPerformers, similarWeights);
+    if (similarPerformersWithWeights.length > 0) {
+      // Pick from similar-rated performers, using cached weights
+      const similarWeights = similarPerformersWithWeights.map(pw => pw.weight);
+      const selected2 = weightedRandomSelect(similarPerformersWithWeights, similarWeights);
       
       // Fallback to pure random if weighted selection fails
-      if (!performer2) {
+      if (!selected2) {
         console.warn("[HotOrNot] Weighted selection for performer2 failed, falling back to random");
-        performer2 = similarPerformers[Math.floor(Math.random() * similarPerformers.length)];
+        const randomSimilar = similarPerformersWithWeights[Math.floor(Math.random() * similarPerformersWithWeights.length)];
+        performer2 = randomSimilar.performer;
+        performer2Index = randomSimilar.index;
+      } else {
+        performer2 = selected2.performer;
+        performer2Index = selected2.index;
       }
-      
-      performer2Index = performers.findIndex(s => s.id === performer2.id);
     } else {
       // No similar performers, pick closest
       const otherPerformers = performers.filter(s => s.id !== performer1.id);
