@@ -1447,6 +1447,12 @@ async function fetchPerformerCount(performerFilter = {}) {
 
   // Swiss mode: fetch two images with similar ratings
   async function fetchSwissPairImages() {
+    // For large image pools (>1000), use sampling for performance
+    // For smaller pools, still get all for accurate ranking
+    const totalImages = await fetchImageCount();
+    const useSampling = totalImages > 1000;
+    const sampleSize = useSampling ? Math.min(500, totalImages) : totalImages;
+    
     const imagesQuery = `
       query FindImagesByRating($filter: FindFilterType) {
         findImages(filter: $filter) {
@@ -1457,12 +1463,12 @@ async function fetchPerformerCount(performerFilter = {}) {
       }
     `;
 
-    // Get images sorted by rating
+    // Get images - either all or a random sample
     const result = await graphqlQuery(imagesQuery, {
       filter: {
-        per_page: -1, // Get all for accurate ranking
-        sort: "rating",
-        direction: "DESC"
+        per_page: sampleSize,
+        sort: useSampling ? "random" : "rating",
+        direction: useSampling ? undefined : "DESC"
       }
     });
 
@@ -1506,7 +1512,8 @@ async function fetchPerformerCount(performerFilter = {}) {
 
     return { 
       images: [image1, image2], 
-      ranks: [randomIndex + 1, image2Index + 1] 
+      // When using sampling, ranks are not meaningful (don't represent true position)
+      ranks: useSampling ? [null, null] : [randomIndex + 1, image2Index + 1] 
     };
   }
 
@@ -2126,6 +2133,145 @@ async function fetchPerformerCount(performerFilter = {}) {
     if (actionsEl) actionsEl.style.display = "";
   }
 
+  // ============================================
+  // IMAGE SELECTION FOR GAUNTLET
+  // ============================================
+
+  async function fetchImagesForSelection(count = 5) {
+    const totalImages = await fetchImageCount();
+    
+    if (totalImages < count) {
+      count = totalImages;
+    }
+
+    const imageQuery = `
+      query FindRandomImages($filter: FindFilterType) {
+        findImages(filter: $filter) {
+          images {
+            ${IMAGE_FRAGMENT}
+          }
+        }
+      }
+    `;
+
+    const result = await graphqlQuery(imageQuery, {
+      filter: {
+        per_page: Math.min(100, totalImages),
+        sort: "random"
+      }
+    });
+
+    const allImages = result.findImages.images || [];
+    const shuffled = allImages.sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, count);
+  }
+
+  function createImageSelectionCard(image) {
+    const imagePath = image.paths && image.paths.thumbnail ? image.paths.thumbnail : null;
+    const rating = image.rating100 ? `${image.rating100}/100` : "Unrated";
+    
+    return `
+      <div class="hon-selection-card" data-image-id="${image.id}">
+        <div class="hon-selection-image-container">
+          ${imagePath 
+            ? `<img class="hon-selection-image" src="${imagePath}" alt="Image #${image.id}" loading="lazy" />`
+            : `<div class="hon-selection-image hon-no-image">No Image</div>`
+          }
+        </div>
+        <div class="hon-selection-info">
+          <h4 class="hon-selection-name">Image #${image.id}</h4>
+          <div class="hon-selection-rating">${rating}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  async function loadImageSelection() {
+    // Note: Reuses performer selection DOM elements for consistency with UI styling
+    const selectionContainer = document.getElementById("hon-performer-selection");
+    const imageList = document.getElementById("hon-performer-list");
+    
+    if (!selectionContainer || !imageList) return;
+
+    try {
+      const images = await fetchImagesForSelection(5);
+      
+      if (images.length === 0) {
+        imageList.innerHTML = '<div class="hon-error">No images available for selection.</div>';
+        return;
+      }
+
+      imageList.innerHTML = images.map(i => createImageSelectionCard(i)).join('');
+      
+      // Attach click handlers
+      imageList.querySelectorAll('.hon-selection-card').forEach((card) => {
+        card.addEventListener('click', () => {
+          const imageId = card.dataset.imageId;
+          const selectedImage = images.find(i => i.id.toString() === imageId);
+          if (selectedImage) {
+            startGauntletWithImage(selectedImage);
+          }
+        });
+      });
+    } catch (error) {
+      console.error("[HotOrNot] Error loading image selection:", error);
+      imageList.innerHTML = `<div class="hon-error">Error loading images: ${error.message}</div>`;
+    }
+  }
+
+  function startGauntletWithImage(image) {
+    // Set the selected image as the gauntlet champion
+    gauntletChampion = image;
+    gauntletWins = 0;
+    gauntletDefeated = [];
+    gauntletFalling = false;
+    gauntletFallingItem = null;
+    
+    // Hide the selection UI
+    const selectionContainer = document.getElementById("hon-performer-selection");
+    if (selectionContainer) {
+      selectionContainer.style.display = "none";
+    }
+    
+    // Show the comparison area and actions
+    const comparisonArea = document.getElementById("hon-comparison-area");
+    const actionsEl = document.querySelector(".hon-actions");
+    if (comparisonArea) comparisonArea.style.display = "";
+    if (actionsEl) actionsEl.style.display = "";
+    
+    // Load the first matchup
+    loadNewPair();
+  }
+
+  function showImageSelection() {
+    // Note: Reuses performer selection DOM elements for consistency with UI styling
+    const selectionContainer = document.getElementById("hon-performer-selection");
+    if (selectionContainer) {
+      selectionContainer.style.display = "block";
+      loadImageSelection();
+    }
+    
+    // Hide the comparison area until an image is selected
+    const comparisonArea = document.getElementById("hon-comparison-area");
+    const actionsEl = document.querySelector(".hon-actions");
+    if (comparisonArea) comparisonArea.style.display = "none";
+    if (actionsEl) actionsEl.style.display = "none";
+  }
+
+  function hideImageSelection() {
+    // Note: Reuses performer selection DOM elements for consistency with UI styling
+    const selectionContainer = document.getElementById("hon-performer-selection");
+    if (selectionContainer) {
+      selectionContainer.style.display = "none";
+    }
+    
+    // Show the comparison area
+    const comparisonArea = document.getElementById("hon-comparison-area");
+    const actionsEl = document.querySelector(".hon-actions");
+    if (comparisonArea) comparisonArea.style.display = "";
+    if (actionsEl) actionsEl.style.display = "";
+  }
+
   function createMainUI() {
     const itemType = battleType === "performers" ? "performers" : (battleType === "images" ? "images" : "scenes");
     const itemTypeSingular = battleType === "performers" ? "performer" : (battleType === "images" ? "image" : "scene");
@@ -2191,6 +2337,12 @@ async function fetchPerformerCount(performerFilter = {}) {
     // For gauntlet mode with performers, show selection if no champion yet
     if (currentMode === "gauntlet" && battleType === "performers" && !gauntletChampion && !gauntletFalling) {
       showPerformerSelection();
+      return;
+    }
+
+    // For gauntlet mode with images, show selection if no champion yet
+    if (currentMode === "gauntlet" && battleType === "images" && !gauntletChampion && !gauntletFalling) {
+      showImageSelection();
       return;
     }
 
@@ -2656,9 +2808,10 @@ function addFloatingButton() {
           const actionsEl = document.querySelector(".hon-actions");
           if (actionsEl) actionsEl.style.display = "";
           
-          // Hide performer selection if not in gauntlet mode
+          // Hide performer/image selection if not in gauntlet mode
           if (currentMode !== "gauntlet") {
             hidePerformerSelection();
+            hideImageSelection();
           }
           
           // Load new pair in new mode
