@@ -1563,7 +1563,9 @@ async function fetchPerformerCount(performerFilter = {}) {
     if (battleType === "performers") {
       return await fetchGauntletPairPerformers();
     } else if (battleType === "images") {
-      return await fetchGauntletPairImages();
+      // Images use Swiss mode only - redirect to Swiss if somehow called
+      console.warn("[HotOrNot] Gauntlet mode not supported for images, using Swiss mode");
+      return await fetchSwissPairImages();
     } else {
       return await fetchGauntletPairScenes();
     }
@@ -1573,7 +1575,9 @@ async function fetchPerformerCount(performerFilter = {}) {
     if (battleType === "performers") {
       return await fetchChampionPairPerformers();
     } else if (battleType === "images") {
-      return await fetchChampionPairImages();
+      // Images use Swiss mode only - redirect to Swiss if somehow called
+      console.warn("[HotOrNot] Champion mode not supported for images, using Swiss mode");
+      return await fetchSwissPairImages();
     } else {
       return await fetchChampionPairScenes();
     }
