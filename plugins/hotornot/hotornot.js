@@ -64,6 +64,7 @@
     name
     image_path
     rating100
+    details
     birthdate
     ethnicity
     country
@@ -554,22 +555,28 @@ async function fetchSceneCount() {
     }
   }
 
-  async function updatePerformerRating(performerId, newRating) {
+  async function updatePerformerRating(performerId, newRating, performerObj = null) {
     const mutation = `
       mutation PerformerUpdate($input: PerformerUpdateInput!) {
         performerUpdate(input: $input) {
           id
           rating100
+          details
         }
       }
     `;
   
-    return await graphqlQuery(mutation, {
-      input: {
-        id: performerId,
-        rating100: Math.round(newRating)
-      }
-    });
+    const input = {
+      id: performerId,
+      rating100: Math.round(newRating)
+    };
+    
+    // Update match count if performer object provided
+    if (performerObj && battleType === "performers") {
+      input.details = updatePerformerEloData(performerObj, 1);
+    }
+    
+    return await graphqlQuery(mutation, { input });
   }
 
 
@@ -577,7 +584,72 @@ async function fetchSceneCount() {
   // RATING LOGIC
   // ============================================
 
-  function getKFactor(currentRating) {
+  /**
+   * Parse ELO match data from performer details JSON
+   * @param {Object} performer - Performer object from GraphQL
+   * @returns {Object} { matches: number, detailsText: string }
+   */
+  function parsePerformerEloData(performer) {
+    if (!performer || !performer.details) {
+      return { matches: 0, detailsText: "" };
+    }
+    
+    try {
+      const detailsObj = JSON.parse(performer.details);
+      return {
+        matches: detailsObj?.custom?.elo_matches || 0,
+        detailsText: detailsObj?.details || ""
+      };
+    } catch (e) {
+      // Legacy text details - preserve as-is
+      return { 
+        matches: 0, 
+        detailsText: performer.details 
+      };
+    }
+  }
+
+  /**
+   * Create updated details JSON with incremented match count
+   * @param {Object} performer - Performer object
+   * @param {number} increment - Amount to increment (default 1)
+   * @returns {string} JSON string for details field
+   */
+  function updatePerformerEloData(performer, increment = 1) {
+    const current = parsePerformerEloData(performer);
+    
+    return JSON.stringify({
+      custom: {
+        elo_matches: current.matches + increment
+      },
+      details: current.detailsText
+    });
+  }
+
+  /**
+   * Calculate K-factor based on match count (experience)
+   * @param {number} currentRating - Current ELO rating
+   * @param {number} matchCount - Number of matches played
+   * @returns {number} K-factor value
+   */
+  function getKFactor(currentRating, matchCount = null) {
+    // If match count is available, use it for more accurate K-factor
+    if (matchCount !== null && matchCount !== undefined) {
+      // New performers: High K-factor for fast convergence
+      if (matchCount < 10) {
+        return 16;
+      }
+      
+      // Moderately established: Medium K-factor
+      if (matchCount < 30) {
+        return 12;
+      }
+      
+      // Well-established: Low K-factor for stability
+      return 8;
+    }
+    
+    // Fallback to rating-based heuristic (legacy behavior)
     // Items near the default rating (50) are likely less established
     // Items far from 50 have likely had more comparisons
     const distanceFromDefault = Math.abs(currentRating - 50);
@@ -591,11 +663,21 @@ async function fetchSceneCount() {
     }
   }
 
-  function handleComparison(winnerId, loserId, winnerCurrentRating, loserCurrentRating, loserRank = null) {
+  function handleComparison(winnerId, loserId, winnerCurrentRating, loserCurrentRating, loserRank = null, winnerObj = null, loserObj = null) {
     const winnerRating = winnerCurrentRating || 50;
     const loserRating = loserCurrentRating || 50;
     
     const ratingDiff = loserRating - winnerRating;
+    
+    // Parse match counts from custom fields (only for performers)
+    let winnerMatchCount = null;
+    let loserMatchCount = null;
+    if (battleType === "performers" && winnerObj) {
+      winnerMatchCount = parsePerformerEloData(winnerObj).matches;
+    }
+    if (battleType === "performers" && loserObj) {
+      loserMatchCount = parsePerformerEloData(loserObj).matches;
+    }
     
     let winnerGain = 0, loserLoss = 0;
     
@@ -609,7 +691,7 @@ async function fetchSceneCount() {
       const isFallingLoser = gauntletFalling && gauntletFallingItem && loserId === gauntletFallingItem.id;
       
       const expectedWinner = 1 / (1 + Math.pow(10, ratingDiff / 40));
-      const kFactor = getKFactor(winnerRating);
+      const kFactor = getKFactor(winnerRating, winnerMatchCount);
       
       // Only the active scene (champion or falling) gets rating changes
       if (isChampionWinner || isFallingWinner) {
@@ -626,7 +708,7 @@ async function fetchSceneCount() {
     } else {
       // Swiss mode: True ELO - both change based on expected outcome
       const expectedWinner = 1 / (1 + Math.pow(10, ratingDiff / 40));
-      const kFactor = getKFactor(winnerRating);
+      const kFactor = getKFactor(winnerRating, winnerMatchCount);
       
       winnerGain = Math.max(0, Math.round(kFactor * (1 - expectedWinner)));
       loserLoss = Math.max(0, Math.round(kFactor * expectedWinner));
@@ -639,8 +721,8 @@ async function fetchSceneCount() {
     const loserChange = newLoserRating - loserRating;
     
     // Update items in Stash (only if changed)
-    if (winnerChange !== 0) updateItemRating(winnerId, newWinnerRating);
-    if (loserChange !== 0) updateItemRating(loserId, newLoserRating);
+    if (winnerChange !== 0) updateItemRating(winnerId, newWinnerRating, winnerObj);
+    if (loserChange !== 0) updateItemRating(loserId, newLoserRating, loserObj);
     
     return { newWinnerRating, newLoserRating, winnerChange, loserChange };
   }
@@ -1424,9 +1506,9 @@ async function fetchPerformerCount(performerFilter = {}) {
     }
   }
 
-  async function updateItemRating(itemId, newRating) {
+  async function updateItemRating(itemId, newRating, itemObj = null) {
     if (battleType === "performers") {
-      return await updatePerformerRating(itemId, newRating);
+      return await updatePerformerRating(itemId, newRating, itemObj);
     } else if (battleType === "images") {
       return await updateImageRating(itemId, newRating);
     } else {
@@ -2023,7 +2105,7 @@ async function fetchPerformerCount(performerFilter = {}) {
           // Falling scene won - found their floor!
           // Set their rating to just above the scene they beat
           const finalRating = Math.min(100, loserRating + 1);
-          updateItemRating(gauntletFallingItem.id, finalRating);
+          updateItemRating(gauntletFallingItem.id, finalRating, gauntletFallingItem);
           
           // Final rank is one above the opponent (we beat them, so we're above them)
           const opponentRank = loserId === currentPair.left.id ? currentRanks.left : currentRanks.right;
@@ -2054,7 +2136,9 @@ async function fetchPerformerCount(performerFilter = {}) {
       }
       
       // Normal climbing - calculate rating changes (pass loserRank for #1 dethrone)
-      const { newWinnerRating, newLoserRating, winnerChange, loserChange } = handleComparison(winnerId, loserId, winnerRating, loserRating, loserRank);
+      const { newWinnerRating, newLoserRating, winnerChange, loserChange } = handleComparison(
+        winnerId, loserId, winnerRating, loserRating, loserRank, winnerItem, loserItem
+      );
       
       if (gauntletChampion && winnerId === gauntletChampion.id) {
         // Champion won - add loser to defeated list and continue climbing
@@ -2098,9 +2182,12 @@ async function fetchPerformerCount(performerFilter = {}) {
     // Handle champion mode (like gauntlet but winner always takes over)
     if (currentMode === "champion") {
       const winnerItem = winnerId === currentPair.left.id ? currentPair.left : currentPair.right;
+      const loserItem = loserId === currentPair.left.id ? currentPair.left : currentPair.right;
       
       // Calculate rating changes (pass loserRank for #1 dethrone)
-      const { newWinnerRating, newLoserRating, winnerChange, loserChange } = handleComparison(winnerId, loserId, winnerRating, loserRating, loserRank);
+      const { newWinnerRating, newLoserRating, winnerChange, loserChange } = handleComparison(
+        winnerId, loserId, winnerRating, loserRating, loserRank, winnerItem, loserItem
+      );
       
       if (gauntletChampion && winnerId === gauntletChampion.id) {
         // Champion won - continue climbing
@@ -2132,7 +2219,11 @@ async function fetchPerformerCount(performerFilter = {}) {
     }
 
     // For Swiss: Calculate and show rating changes
-    const { newWinnerRating, newLoserRating, winnerChange, loserChange } = handleComparison(winnerId, loserId, winnerRating, loserRating);
+    const winnerItem = winnerId === currentPair.left.id ? currentPair.left : currentPair.right;
+    const loserItem = loserId === currentPair.left.id ? currentPair.left : currentPair.right;
+    const { newWinnerRating, newLoserRating, winnerChange, loserChange } = handleComparison(
+      winnerId, loserId, winnerRating, loserRating, null, winnerItem, loserItem
+    );
 
     // Visual feedback
     winnerCard.classList.add("hon-winner");
