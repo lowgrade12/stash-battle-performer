@@ -1679,7 +1679,7 @@ async function fetchPerformerCount(performerFilter = {}) {
       performerList.querySelectorAll('.hon-selection-card').forEach((card) => {
         card.addEventListener('click', () => {
           const performerId = card.dataset.performerId;
-          const selectedPerformer = performers.find(p => p.id === performerId);
+          const selectedPerformer = performers.find(p => p.id.toString() === performerId);
           if (selectedPerformer) {
             startGauntletWithPerformer(selectedPerformer);
           }
