@@ -50,6 +50,17 @@ The plugin uses an ELO-inspired algorithm where:
 - Losing to a lower-rated item costs more points than losing to a higher-rated one
 - Ratings are stored in Stash's native `rating100` field (1-100 scale which is why changing to decimal rating system type is recommended)
 
+### Match Count Tracking (NEW!)
+
+For performers, the plugin now tracks how many comparisons each performer has participated in using Stash's custom fields:
+- **New performers** (<10 matches): Faster rating changes (K=16) to quickly find their accurate position
+- **Moderately established** (10-30 matches): Balanced rating changes (K=12)
+- **Well-established** (>50 matches): Smaller rating changes (K=8) for stable rankings
+
+This means new performers reach their accurate rating faster, while established performers' hard-earned rankings are better protected from random fluctuations.
+
+Match data is stored in the `details` field as JSON and is fully backward compatible with existing performers.
+
 ## Requirements
 
 - At least 2 performers or images in your library (depending on which page you're on)
