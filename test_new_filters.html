@@ -158,7 +158,11 @@
                 
                 // Handle country filter
                 if (criteria.type === 'country') {
-                    const countryValue = criteria.value?.value || criteria.value;
+                    let countryValue = criteria.value?.value || criteria.value;
+                    // If value is an array, extract the first element
+                    if (Array.isArray(countryValue)) {
+                        countryValue = countryValue.length > 0 ? countryValue[0] : null;
+                    }
                     if (countryValue) {
                         filter.country = {
                             value: countryValue,
