@@ -2252,10 +2252,11 @@ async function fetchPerformerCount(performerFilter = {}) {
                 </label>
                 <div class="hon-filter-options" id="filter-gender-options">
                   <div class="hon-gender-checkboxes">
-                    <label><input type="checkbox" value="MALE" ${performerFilters.gender.exclude.includes('MALE') ? 'checked' : ''}> Exclude Male</label>
                     <label><input type="checkbox" value="FEMALE" ${performerFilters.gender.exclude.includes('FEMALE') ? 'checked' : ''}> Exclude Female</label>
-                    <label><input type="checkbox" value="TRANSGENDER_MALE" ${performerFilters.gender.exclude.includes('TRANSGENDER_MALE') ? 'checked' : ''}> Exclude Trans Male</label>
-                    <label><input type="checkbox" value="TRANSGENDER_FEMALE" ${performerFilters.gender.exclude.includes('TRANSGENDER_FEMALE') ? 'checked' : ''}> Exclude Trans Female</label>
+                    <label><input type="checkbox" value="MALE" ${performerFilters.gender.exclude.includes('MALE') ? 'checked' : ''}> Exclude Male</label>
+                    <label><input type="checkbox" value="TRANSGENDER_MALE" ${performerFilters.gender.exclude.includes('TRANSGENDER_MALE') ? 'checked' : ''}> Exclude Transgender Male</label>
+                    <label><input type="checkbox" value="TRANSGENDER_FEMALE" ${performerFilters.gender.exclude.includes('TRANSGENDER_FEMALE') ? 'checked' : ''}> Exclude Transgender Female</label>
+                    <label><input type="checkbox" value="INTERSEX" ${performerFilters.gender.exclude.includes('INTERSEX') ? 'checked' : ''}> Exclude Intersex</label>
                     <label><input type="checkbox" value="NON_BINARY" ${performerFilters.gender.exclude.includes('NON_BINARY') ? 'checked' : ''}> Exclude Non-Binary</label>
                   </div>
                 </div>
