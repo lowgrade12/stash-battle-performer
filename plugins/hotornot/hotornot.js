@@ -1082,14 +1082,11 @@ async function fetchSceneCount() {
   }
 
   /**
-   * Convert active page filters to GraphQL performer filter format
-   * This allows HotOrNot to respect user's current filter selection
-   * @param {Object} activeFilters - Filter criteria from getActiveFilters()
-   * @returns {Object} GraphQL-compatible performer filter object
+   * Get the default performer filters used by HotOrNot
+   * @returns {Object} Default GraphQL performer filter object
    */
-  function convertToPerformerFilter(activeFilters) {
-    // Start with default filters (exclude males, exclude without images)
-    const filter = {
+  function getDefaultPerformerFilters() {
+    return {
       gender: {
         value: "MALE",
         modifier: "EXCLUDES"
@@ -1098,11 +1095,21 @@ async function fetchSceneCount() {
         is_missing: "image"
       }
     };
-    
-    // If no active filters, return default
+  }
+
+  /**
+   * Convert active page filters to GraphQL performer filter format
+   * This allows HotOrNot to respect user's current filter selection
+   * @param {Object} activeFilters - Filter criteria from getActiveFilters()
+   * @returns {Object} GraphQL-compatible performer filter object (only page-specific filters, no defaults)
+   */
+  function convertToPerformerFilter(activeFilters) {
+    // Return empty object if no active filters
     if (!activeFilters || !activeFilters.criteria) {
-      return filter;
+      return {};
     }
+    
+    const filter = {};
     
     // Add active filters from the page
     // Note: Stash's filter format can be complex with nested criteria
@@ -1198,16 +1205,8 @@ async function fetchPerformerCount(performerFilter = {}) {
   }
 
   function getPerformerFilter(respectPageFilters = true) {
-    const filter = {};
-    // Exclude male performers
-    filter.gender = {
-      value: "MALE",
-      modifier: "EXCLUDES"
-    };
-    // Exclude performers without images by filtering out those where image is missing
-    filter.NOT = {
-      is_missing: "image"
-    };
+    // Start with default filters
+    const filter = getDefaultPerformerFilters();
     
     // Optionally incorporate active page filters
     if (respectPageFilters) {
@@ -1215,9 +1214,17 @@ async function fetchPerformerCount(performerFilter = {}) {
         const activeFilters = getActiveFilters();
         if (activeFilters.hasFilters) {
           console.log('[HotOrNot] Respecting active page filters:', activeFilters.descriptions);
-          const converted = convertToPerformerFilter(activeFilters);
-          // Merge converted filters (keeping our defaults, adding page-specific filters)
-          Object.assign(filter, converted);
+          const pageFilters = convertToPerformerFilter(activeFilters);
+          
+          // Merge page-specific filters with defaults
+          // This preserves our critical defaults (exclude males, exclude without images)
+          // while adding any additional page filters
+          Object.keys(pageFilters).forEach(key => {
+            // Don't overwrite critical default filters
+            if (key !== 'gender' && key !== 'NOT') {
+              filter[key] = pageFilters[key];
+            }
+          });
         }
       } catch (e) {
         console.warn('[HotOrNot] Failed to read page filters, using defaults:', e);
