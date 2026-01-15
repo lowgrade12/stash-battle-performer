@@ -296,7 +296,7 @@
         if (value && value.items && value.items.length > 0) {
           // Extract IDs from items - handle both object format and direct ID format
           const tagIds = value.items.map(item => {
-            if (typeof item === 'object' && item !== null && item.id !== undefined) {
+            if (typeof item === 'object' && item !== null && 'id' in item) {
               return item.id;
             }
             return item;
@@ -318,7 +318,7 @@
         if (value && value.items && value.items.length > 0) {
           // Extract IDs from items - handle both object format and direct ID format
           const studioIds = value.items.map(item => {
-            if (typeof item === 'object' && item !== null && item.id !== undefined) {
+            if (typeof item === 'object' && item !== null && 'id' in item) {
               return item.id;
             }
             return item;
