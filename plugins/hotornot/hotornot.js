@@ -18,7 +18,8 @@
   // Filter constants
   // Protected filter keys that should never be overwritten by page filters
   // These are critical defaults that ensure the plugin works correctly
-  const PROTECTED_FILTER_KEYS = new Set(['gender', 'NOT']);
+  // Note: gender is no longer protected - users can filter by gender explicitly
+  const PROTECTED_FILTER_KEYS = new Set(['NOT']);
 
   // ============================================
   // GRAPHQL QUERIES
@@ -1141,17 +1142,38 @@ async function fetchSceneCount() {
       
       // Handle rating filter (numeric comparison)
       // Note: Use parseFloat to support decimal ratings (e.g., 87.5)
-      if (criteria.type === 'rating100' && criteria.value?.value !== undefined) {
-        const ratingValue = parseFloat(criteria.value.value);
-        // Validate rating is a number and within valid range (0-100)
-        if (!isNaN(ratingValue) && ratingValue >= 0 && ratingValue <= 100) {
-          filter.rating100 = {
-            value: ratingValue,
-            modifier: criteria.modifier || 'EQUALS'
-          };
-          console.log('[HotOrNot] Applied rating100 filter:', filter.rating100);
-        } else {
-          console.warn('[HotOrNot] Invalid rating value (must be 0-100):', ratingValue);
+      if (criteria.type === 'rating100') {
+        // Handle BETWEEN modifier (requires value and value2)
+        if (criteria.modifier === 'BETWEEN' && criteria.value?.value !== undefined && criteria.value?.value2 !== undefined) {
+          const ratingValue = parseFloat(criteria.value.value);
+          const ratingValue2 = parseFloat(criteria.value.value2);
+          // Validate both ratings are numbers and within valid range (0-100)
+          if (!isNaN(ratingValue) && !isNaN(ratingValue2) && 
+              ratingValue >= 0 && ratingValue <= 100 && 
+              ratingValue2 >= 0 && ratingValue2 <= 100) {
+            filter.rating100 = {
+              value: ratingValue,
+              value2: ratingValue2,
+              modifier: 'BETWEEN'
+            };
+            console.log('[HotOrNot] Applied rating100 BETWEEN filter:', filter.rating100);
+          } else {
+            console.warn('[HotOrNot] Invalid rating value (must be 0-100):', ratingValue, ratingValue2);
+          }
+        }
+        // Handle other modifiers (single value)
+        else if (criteria.value?.value !== undefined) {
+          const ratingValue = parseFloat(criteria.value.value);
+          // Validate rating is a number and within valid range (0-100)
+          if (!isNaN(ratingValue) && ratingValue >= 0 && ratingValue <= 100) {
+            filter.rating100 = {
+              value: ratingValue,
+              modifier: criteria.modifier || 'EQUALS'
+            };
+            console.log('[HotOrNot] Applied rating100 filter:', filter.rating100);
+          } else {
+            console.warn('[HotOrNot] Invalid rating value (must be 0-100):', ratingValue);
+          }
         }
       }
       
@@ -1194,16 +1216,33 @@ async function fetchSceneCount() {
       }
       
       // Handle country filter
-      if (criteria.type === 'country' && criteria.value?.value) {
-        filter.country = {
-          value: criteria.value.value,
-          modifier: criteria.modifier || 'EQUALS'
-        };
-        console.log('[HotOrNot] Applied country filter:', filter.country);
+      if (criteria.type === 'country') {
+        // Country filter can have value directly or nested in value object
+        const countryValue = criteria.value?.value || criteria.value;
+        if (countryValue) {
+          filter.country = {
+            value: countryValue,
+            modifier: criteria.modifier || 'EQUALS'
+          };
+          console.log('[HotOrNot] Applied country filter:', filter.country);
+        }
+      }
+      
+      // Handle gender filter
+      if (criteria.type === 'gender') {
+        // Gender filter can have value directly or nested in value object
+        const genderValue = criteria.value?.value || criteria.value;
+        if (genderValue) {
+          filter.gender = {
+            value: genderValue,
+            modifier: criteria.modifier || 'INCLUDES'
+          };
+          console.log('[HotOrNot] Applied gender filter:', filter.gender);
+        }
       }
       
       // List of supported filter types for validation
-      const supportedTypes = ['created_at', 'rating100', 'birthdate', 'tags', 'studios', 'ethnicity', 'country'];
+      const supportedTypes = ['created_at', 'rating100', 'birthdate', 'tags', 'studios', 'ethnicity', 'country', 'gender'];
       
       // Log if filter type was not recognized
       if (!supportedTypes.includes(criteria.type)) {
@@ -1246,10 +1285,11 @@ async function fetchPerformerCount(performerFilter = {}) {
           const pageFilters = convertToPerformerFilter(activeFilters);
           
           // Merge page-specific filters with defaults
-          // This preserves our critical defaults (exclude males, exclude without images)
+          // This preserves our critical defaults (exclude without images)
           // while adding any additional page filters
           Object.keys(pageFilters).forEach(key => {
-            // Don't overwrite protected filter keys (gender, NOT)
+            // Don't overwrite protected filter keys (NOT)
+            // Gender can now be overridden by page filters
             if (!PROTECTED_FILTER_KEYS.has(key)) {
               filter[key] = pageFilters[key];
             }

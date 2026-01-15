@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HotOrNot Filter Enhancement Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        h1 {
+            color: #0d6efd;
+        }
+        .test-section {
+            background: #2a2a2a;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+        .test-section h2 {
+            margin-top: 0;
+            color: #fff;
+        }
+        .result {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .success {
+            border-left: 4px solid #28a745;
+        }
+        .error {
+            border-left: 4px solid #dc3545;
+        }
+        button {
+            background: #0d6efd;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0b5ed7;
+        }
+        code {
+            background: #1a1a1a;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #0d6efd;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔥 HotOrNot Filter Enhancement Test</h1>
+    <p>Testing new filter features: gender filter, BETWEEN modifier, and improved country filter.</p>
+
+    <div class="test-section">
+        <h2>1. Gender Filter Support</h2>
+        <p>Test that gender filter can now be applied from page filters.</p>
+        
+        <button onclick="testGenderFilter()">Test Gender Filter (FEMALE)</button>
+        <button onclick="testGenderFilterExcludes()">Test Gender Filter (EXCLUDES MALE)</button>
+        <div id="gender-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. BETWEEN Modifier Support</h2>
+        <p>Test rating100 filter with BETWEEN modifier (e.g., rating between 20-30).</p>
+        
+        <button onclick="testBetweenFilter()">Test BETWEEN Filter (20-30)</button>
+        <button onclick="testBetweenFilter2()">Test BETWEEN Filter (50-80)</button>
+        <div id="between-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Country Filter</h2>
+        <p>Test improved country filter with better value extraction.</p>
+        
+        <button onclick="testCountryFilter()">Test Country Filter (Nested Value)</button>
+        <button onclick="testCountryFilterDirect()">Test Country Filter (Direct Value)</button>
+        <div id="country-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Combined Filters</h2>
+        <p>Test multiple filters together.</p>
+        
+        <button onclick="testCombinedFilters()">Test Gender + Rating BETWEEN + Country</button>
+        <div id="combined-result" class="result"></div>
+    </div>
+
+    <script>
+        // Copy the filter reading functions from hotornot.js for testing
+
+        function parseStashFilterParam(paramValue) {
+            if (!paramValue) return null;
+            
+            try {
+                const decoded = decodeURIComponent(paramValue);
+                let jsonStr = decoded
+                    .replace(/\(/g, '{')
+                    .replace(/\)/g, '}');
+                const parsed = JSON.parse(jsonStr);
+                return parsed;
+            } catch (e) {
+                console.warn('[Test] Failed to parse filter parameter:', e);
+                return null;
+            }
+        }
+
+        function convertToPerformerFilter(activeFilters) {
+            if (!activeFilters || !activeFilters.criteria) {
+                return {};
+            }
+            
+            const filter = {};
+            const criteria = activeFilters.criteria;
+            
+            try {
+                // Handle rating filter with BETWEEN modifier
+                if (criteria.type === 'rating100') {
+                    if (criteria.modifier === 'BETWEEN' && criteria.value?.value !== undefined && criteria.value?.value2 !== undefined) {
+                        const ratingValue = parseFloat(criteria.value.value);
+                        const ratingValue2 = parseFloat(criteria.value.value2);
+                        if (!isNaN(ratingValue) && !isNaN(ratingValue2) && 
+                            ratingValue >= 0 && ratingValue <= 100 && 
+                            ratingValue2 >= 0 && ratingValue2 <= 100) {
+                            filter.rating100 = {
+                                value: ratingValue,
+                                value2: ratingValue2,
+                                modifier: 'BETWEEN'
+                            };
+                        }
+                    } else if (criteria.value?.value !== undefined) {
+                        const ratingValue = parseFloat(criteria.value.value);
+                        if (!isNaN(ratingValue) && ratingValue >= 0 && ratingValue <= 100) {
+                            filter.rating100 = {
+                                value: ratingValue,
+                                modifier: criteria.modifier || 'EQUALS'
+                            };
+                        }
+                    }
+                }
+                
+                // Handle country filter
+                if (criteria.type === 'country') {
+                    const countryValue = criteria.value?.value || criteria.value;
+                    if (countryValue) {
+                        filter.country = {
+                            value: countryValue,
+                            modifier: criteria.modifier || 'EQUALS'
+                        };
+                    }
+                }
+                
+                // Handle gender filter
+                if (criteria.type === 'gender') {
+                    const genderValue = criteria.value?.value || criteria.value;
+                    if (genderValue) {
+                        filter.gender = {
+                            value: genderValue,
+                            modifier: criteria.modifier || 'INCLUDES'
+                        };
+                    }
+                }
+                
+            } catch (e) {
+                console.warn('[Test] Error converting filter criteria:', e);
+            }
+            
+            return filter;
+        }
+
+        // Test functions
+        function testGenderFilter() {
+            const result = document.getElementById('gender-result');
+            
+            // Simulate gender filter: INCLUDES FEMALE
+            const filterData = {
+                type: "gender",
+                modifier: "INCLUDES",
+                value: {
+                    value: "FEMALE"
+                }
+            };
+            
+            const activeFilters = {
+                criteria: filterData,
+                hasFilters: true
+            };
+            
+            const converted = convertToPerformerFilter(activeFilters);
+            
+            if (converted.gender && converted.gender.value === "FEMALE") {
+                result.className = 'result success';
+                result.textContent = 'SUCCESS! Gender filter applied:\n' + JSON.stringify(converted, null, 2);
+            } else {
+                result.className = 'result error';
+                result.textContent = 'FAILED: Gender filter not applied correctly\n' + JSON.stringify(converted, null, 2);
+            }
+        }
+
+        function testGenderFilterExcludes() {
+            const result = document.getElementById('gender-result');
+            
+            // Simulate gender filter: EXCLUDES MALE (the default)
+            const filterData = {
+                type: "gender",
+                modifier: "EXCLUDES",
+                value: "MALE"
+            };
+            
+            const activeFilters = {
+                criteria: filterData,
+                hasFilters: true
+            };
+            
+            const converted = convertToPerformerFilter(activeFilters);
+            
+            if (converted.gender && converted.gender.value === "MALE" && converted.gender.modifier === "EXCLUDES") {
+                result.className = 'result success';
+                result.textContent = 'SUCCESS! Gender EXCLUDES filter applied:\n' + JSON.stringify(converted, null, 2);
+            } else {
+                result.className = 'result error';
+                result.textContent = 'FAILED: Gender EXCLUDES filter not applied correctly\n' + JSON.stringify(converted, null, 2);
+            }
+        }
+
+        function testBetweenFilter() {
+            const result = document.getElementById('between-result');
+            
+            // Simulate BETWEEN filter as shown in problem statement
+            const filterData = {
+                type: "rating100",
+                modifier: "BETWEEN",
+                value: {
+                    value: 20,
+                    value2: 30
+                }
+            };
+            
+            const activeFilters = {
+                criteria: filterData,
+                hasFilters: true
+            };
+            
+            const converted = convertToPerformerFilter(activeFilters);
+            
+            if (converted.rating100 && converted.rating100.modifier === "BETWEEN" && 
+                converted.rating100.value === 20 && converted.rating100.value2 === 30) {
+                result.className = 'result success';
+                result.textContent = 'SUCCESS! BETWEEN filter applied (20-30):\n' + JSON.stringify(converted, null, 2);
+            } else {
+                result.className = 'result error';
+                result.textContent = 'FAILED: BETWEEN filter not applied correctly\n' + JSON.stringify(converted, null, 2);
+            }
+        }
+
+        function testBetweenFilter2() {
+            const result = document.getElementById('between-result');
+            
+            const filterData = {
+                type: "rating100",
+                modifier: "BETWEEN",
+                value: {
+                    value: 50,
+                    value2: 80
+                }
+            };
+            
+            const activeFilters = {
+                criteria: filterData,
+                hasFilters: true
+            };
+            
+            const converted = convertToPerformerFilter(activeFilters);
+            
+            if (converted.rating100 && converted.rating100.modifier === "BETWEEN" && 
+                converted.rating100.value === 50 && converted.rating100.value2 === 80) {
+                result.className = 'result success';
+                result.textContent = 'SUCCESS! BETWEEN filter applied (50-80):\n' + JSON.stringify(converted, null, 2);
+            } else {
+                result.className = 'result error';
+                result.textContent = 'FAILED: BETWEEN filter not applied correctly\n' + JSON.stringify(converted, null, 2);
+            }
+        }
+
+        function testCountryFilter() {
+            const result = document.getElementById('country-result');
+            
+            // Test with nested value (original structure)
+            const filterData = {
+                type: "country",
+                modifier: "EQUALS",
+                value: {
+                    value: "United States"
+                }
+            };
+            
+            const activeFilters = {
+                criteria: filterData,
+                hasFilters: true
+            };
+            
+            const converted = convertToPerformerFilter(activeFilters);
+            
+            if (converted.country && converted.country.value === "United States") {
+                result.className = 'result success';
+                result.textContent = 'SUCCESS! Country filter applied (nested):\n' + JSON.stringify(converted, null, 2);
+            } else {
+                result.className = 'result error';
+                result.textContent = 'FAILED: Country filter not applied correctly\n' + JSON.stringify(converted, null, 2);
+            }
+        }
+
+        function testCountryFilterDirect() {
+            const result = document.getElementById('country-result');
+            
+            // Test with direct value
+            const filterData = {
+                type: "country",
+                modifier: "EQUALS",
+                value: "Canada"
+            };
+            
+            const activeFilters = {
+                criteria: filterData,
+                hasFilters: true
+            };
+            
+            const converted = convertToPerformerFilter(activeFilters);
+            
+            if (converted.country && converted.country.value === "Canada") {
+                result.className = 'result success';
+                result.textContent = 'SUCCESS! Country filter applied (direct):\n' + JSON.stringify(converted, null, 2);
+            } else {
+                result.className = 'result error';
+                result.textContent = 'FAILED: Country filter not applied correctly\n' + JSON.stringify(converted, null, 2);
+            }
+        }
+
+        function testCombinedFilters() {
+            const result = document.getElementById('combined-result');
+            
+            // Note: This is a simplified test. In reality, Stash would send one filter at a time
+            // But we can simulate the result of applying multiple filters
+            
+            const filters = {
+                gender: {
+                    type: "gender",
+                    modifier: "INCLUDES",
+                    value: "FEMALE"
+                },
+                rating: {
+                    type: "rating100",
+                    modifier: "BETWEEN",
+                    value: { value: 20, value2: 30 }
+                },
+                country: {
+                    type: "country",
+                    modifier: "EQUALS",
+                    value: { value: "United States" }
+                }
+            };
+            
+            const results = {};
+            
+            Object.keys(filters).forEach(key => {
+                const activeFilters = {
+                    criteria: filters[key],
+                    hasFilters: true
+                };
+                const converted = convertToPerformerFilter(activeFilters);
+                Object.assign(results, converted);
+            });
+            
+            if (results.gender && results.rating100 && results.country) {
+                result.className = 'result success';
+                result.textContent = 'SUCCESS! All filters can be applied:\n' + JSON.stringify(results, null, 2);
+            } else {
+                result.className = 'result error';
+                result.textContent = 'FAILED: Not all filters applied\n' + JSON.stringify(results, null, 2);
+            }
+        }
+
+        // Run initial test on load
+        window.addEventListener('load', () => {
+            console.log('Filter enhancement tests ready');
+        });
+    </script>
+</body>
+</html>

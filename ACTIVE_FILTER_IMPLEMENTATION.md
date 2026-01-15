@@ -4,6 +4,25 @@
 
 The HotOrNot plugin can now read and respect active filters from the Stash Performers and Images pages. This allows users to apply filters (e.g., "Created At is greater than 2026-01-12") and have the plugin only select items that match those filters for comparison.
 
+## Recent Enhancements (January 2026)
+
+### Gender Filter Support
+- Gender filter is now supported and can be explicitly set by users
+- Previously, gender was a protected filter that excluded males by default
+- Now users can filter by any gender (MALE, FEMALE, etc.) using INCLUDES or EXCLUDES modifiers
+- Default behavior still excludes males, but this can be overridden
+
+### BETWEEN Modifier Support
+- Added support for `BETWEEN` modifier for rating100 filters
+- Allows filtering performers by rating range (e.g., rating between 20-30)
+- Format: `?c=("type":"rating100","modifier":"BETWEEN","value":("value":20,"value2":30))`
+- Both value and value2 are validated to be within 0-100 range
+
+### Improved Country Filter
+- Fixed country filter to handle both nested and direct value formats
+- Now works with `value.value` structure: `{"type":"country","value":{"value":"United States"}}`
+- Also works with direct value: `{"type":"country","value":"United States"}`
+
 ## Implementation Approach
 
 After reviewing three potential approaches for reading active filters, we implemented a **hybrid solution** that combines the most reliable methods:
@@ -70,12 +89,13 @@ Converts active page filters to GraphQL-compatible performer filter format.
 
 **Currently supports:**
 - `created_at` filters - Date/timestamp comparisons
-- `rating100` filters - Numeric rating comparisons
+- `rating100` filters - Numeric rating comparisons (including BETWEEN modifier)
 - `birthdate` filters - Birthdate comparisons
 - `tags` filters - Tag inclusion/exclusion
 - `studios` filters - Studio filtering
 - `ethnicity` filters - Ethnicity matching
 - `country` filters - Country matching
+- `gender` filters - Gender filtering (NEW!)
 
 **Filter modifiers supported:**
 - `EQUALS` - Exact match
@@ -84,6 +104,7 @@ Converts active page filters to GraphQL-compatible performer filter format.
 - `INCLUDES` - Contains/includes
 - `EXCLUDES` - Does not contain/excludes
 - `INCLUDES_ALL` - Includes all specified values
+- `BETWEEN` - Between two values (for rating100 filters) (NEW!)
 
 Can be extended to support additional filter types as needed.
 
@@ -91,7 +112,8 @@ Can be extended to support additional filter types as needed.
 Updated to optionally incorporate active page filters into the performer query.
 
 - When `respectPageFilters = true` (default), merges page filters with plugin defaults
-- When `respectPageFilters = false`, uses only plugin defaults (exclude males, exclude without images)
+- When `respectPageFilters = false`, uses only plugin defaults (exclude without images)
+- **Gender filter can now be overridden** by page filters (no longer protected)
 
 ## User Experience
 
