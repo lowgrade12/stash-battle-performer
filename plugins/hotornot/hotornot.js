@@ -2256,7 +2256,6 @@ async function fetchPerformerCount(performerFilter = {}) {
           updateItemRating(gauntletFallingItem.id, finalRating, gauntletFallingItem, true);
           
           // Track participation for the loser (defender)
-          const loserItem = loserId === currentPair.left.id ? currentPair.left : currentPair.right;
           updateItemRating(loserId, loserRating, loserItem, null);
           
           // Final rank is one above the opponent (we beat them, so we're above them)
@@ -2277,9 +2276,6 @@ async function fetchPerformerCount(performerFilter = {}) {
           gauntletDefeated.push(winnerId);
           
           // Track stats for both participants
-          const winnerItem = winnerId === currentPair.left.id ? currentPair.left : currentPair.right;
-          const loserItem = loserId === currentPair.left.id ? currentPair.left : currentPair.right;
-          
           // Track loss for the falling performer
           updateItemRating(gauntletFallingItem.id, loserRating, gauntletFallingItem, false);
           
