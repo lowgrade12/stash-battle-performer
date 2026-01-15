@@ -994,29 +994,12 @@ async function fetchPerformerCount(performerFilter = {}) {
 
   function getPerformerFilter() {
     const filter = {};
-    
-    // Try to read the active filter from the performers page
-    try {
-      const savedFilter = localStorage.getItem('filter.performers');
-      if (savedFilter) {
-        const parsedFilter = JSON.parse(savedFilter);
-        // Use the criteria from the saved filter if it exists
-        // Note: When a filter is active, we use the user's exact filter criteria.
-        // This allows full customization - users can include/exclude any performers they want.
-        if (parsedFilter && parsedFilter.criteria) {
-          return parsedFilter.criteria;
-        }
-      }
-    } catch (e) {
-      console.warn('[HotOrNot] Failed to read performer filter from localStorage:', e.message || e);
-    }
-    
-    // Fallback: Use default behavior (exclude males and performers without images)
-    // This preserves the original behavior when no custom filter is active
+    // Exclude male performers
     filter.gender = {
       value: "MALE",
       modifier: "EXCLUDES"
     };
+    // Exclude performers without images by filtering out those where image is missing
     filter.NOT = {
       is_missing: "image"
     };
@@ -1027,7 +1010,7 @@ async function fetchPerformerCount(performerFilter = {}) {
   const performerFilter = getPerformerFilter();
   const totalPerformers = await fetchPerformerCount(performerFilter);
   if (totalPerformers < 2) {
-    throw new Error("Not enough performers for comparison. You need at least 2 performers matching your filter criteria.");
+    throw new Error("Not enough performers for comparison. You need at least 2 non-male performers with images.");
   }
 
   const performerQuery = `
