@@ -977,6 +977,160 @@ async function fetchSceneCount() {
 
 
   // ============================================
+  // FILTER READING UTILITIES
+  // ============================================
+
+  /**
+   * Parse Stash's custom filter serialization format from URL parameter
+   * Format: ("key":"value","key2":"value2") - uses colons and parentheses instead of standard JSON
+   * @param {string} paramValue - The raw 'c' parameter value from URL
+   * @returns {Object|null} Parsed filter object or null if parsing fails
+   */
+  function parseStashFilterParam(paramValue) {
+    if (!paramValue) return null;
+    
+    try {
+      // Decode URI component first
+      const decoded = decodeURIComponent(paramValue);
+      
+      // Convert Stash's custom format to valid JSON
+      // Replace parentheses with braces, keeping quotes intact
+      let jsonStr = decoded
+        .replace(/\(/g, '{')
+        .replace(/\)/g, '}');
+      
+      // Parse the resulting JSON
+      const parsed = JSON.parse(jsonStr);
+      return parsed;
+    } catch (e) {
+      console.warn('[HotOrNot] Failed to parse filter parameter:', e);
+      return null;
+    }
+  }
+
+  /**
+   * Read active filters from the current page URL
+   * Stash stores filter state in the 'c' URL parameter
+   * @returns {Object|null} Filter criteria object or null if no filters active
+   */
+  function readFiltersFromURL() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const criteriaParam = params.get('c');
+      
+      if (!criteriaParam) {
+        console.log('[HotOrNot] No active filters found in URL');
+        return null;
+      }
+      
+      const parsed = parseStashFilterParam(criteriaParam);
+      if (parsed) {
+        console.log('[HotOrNot] Active filters from URL:', parsed);
+      }
+      
+      return parsed;
+    } catch (e) {
+      console.warn('[HotOrNot] Error reading filters from URL:', e);
+      return null;
+    }
+  }
+
+  /**
+   * Read active filter chips from the DOM (visual confirmation)
+   * Scrapes the filter bar UI elements to extract human-readable filter information
+   * @returns {Array<string>} Array of filter descriptions (e.g., ["Created At is greater than 2026-01-12"])
+   */
+  function readFiltersFromDOM() {
+    try {
+      // Look for filter chips in the Stash UI
+      const filterChips = document.querySelectorAll('.filter-item-list .btn-secondary, .filter-item-list button');
+      
+      if (filterChips.length === 0) {
+        console.log('[HotOrNot] No filter chips found in DOM');
+        return [];
+      }
+      
+      const filters = Array.from(filterChips)
+        .map(chip => chip.textContent?.trim())
+        .filter(text => text && text.length > 0);
+      
+      if (filters.length > 0) {
+        console.log('[HotOrNot] Active filters from DOM:', filters);
+      }
+      
+      return filters;
+    } catch (e) {
+      console.warn('[HotOrNot] Error reading filters from DOM:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Get currently active filters using a hybrid approach
+   * Prioritizes URL parsing (programmatic) with DOM fallback (visual confirmation)
+   * @returns {Object} Object containing parsed filters and visual descriptions
+   */
+  function getActiveFilters() {
+    const urlFilters = readFiltersFromURL();
+    const domFilters = readFiltersFromDOM();
+    
+    return {
+      criteria: urlFilters,           // Parsed filter criteria from URL
+      descriptions: domFilters,        // Human-readable filter descriptions from DOM
+      hasFilters: urlFilters !== null || domFilters.length > 0
+    };
+  }
+
+  /**
+   * Convert active page filters to GraphQL performer filter format
+   * This allows HotOrNot to respect user's current filter selection
+   * @param {Object} activeFilters - Filter criteria from getActiveFilters()
+   * @returns {Object} GraphQL-compatible performer filter object
+   */
+  function convertToPerformerFilter(activeFilters) {
+    // Start with default filters (exclude males, exclude without images)
+    const filter = {
+      gender: {
+        value: "MALE",
+        modifier: "EXCLUDES"
+      },
+      NOT: {
+        is_missing: "image"
+      }
+    };
+    
+    // If no active filters, return default
+    if (!activeFilters || !activeFilters.criteria) {
+      return filter;
+    }
+    
+    // Add active filters from the page
+    // Note: This is a basic implementation. Stash's filter format can be complex.
+    // You may need to extend this based on specific filter types you want to support.
+    const criteria = activeFilters.criteria;
+    
+    // Example: Handle created_at filter
+    if (criteria.type === 'created_at') {
+      filter.created_at = {
+        value: criteria.value?.value,
+        modifier: criteria.modifier
+      };
+    }
+    
+    // Example: Handle rating filter
+    if (criteria.type === 'rating') {
+      filter.rating100 = {
+        value: parseInt(criteria.value?.value, 10),
+        modifier: criteria.modifier
+      };
+    }
+    
+    // Note: Add more filter type conversions as needed based on your use cases
+    
+    return filter;
+  }
+
+  // ============================================
   // PERFORMER FUNCTIONS
   // ============================================
 
@@ -992,7 +1146,7 @@ async function fetchPerformerCount(performerFilter = {}) {
     return countResult.findPerformers.count;
   }
 
-  function getPerformerFilter() {
+  function getPerformerFilter(respectPageFilters = true) {
     const filter = {};
     // Exclude male performers
     filter.gender = {
@@ -1003,6 +1157,22 @@ async function fetchPerformerCount(performerFilter = {}) {
     filter.NOT = {
       is_missing: "image"
     };
+    
+    // Optionally incorporate active page filters
+    if (respectPageFilters) {
+      try {
+        const activeFilters = getActiveFilters();
+        if (activeFilters.hasFilters) {
+          console.log('[HotOrNot] Respecting active page filters:', activeFilters.descriptions);
+          const converted = convertToPerformerFilter(activeFilters);
+          // Merge converted filters (keeping our defaults, adding page-specific filters)
+          Object.assign(filter, converted);
+        }
+      } catch (e) {
+        console.warn('[HotOrNot] Failed to read page filters, using defaults:', e);
+      }
+    }
+    
     return filter;
   }
 
@@ -2043,6 +2213,15 @@ async function fetchPerformerCount(performerFilter = {}) {
     const itemType = battleType === "performers" ? "performers" : (battleType === "images" ? "images" : "scenes");
     const itemTypeSingular = battleType === "performers" ? "performer" : (battleType === "images" ? "image" : "scene");
     
+    // Check for active filters
+    const activeFilters = getActiveFilters();
+    const filterBadgeHTML = activeFilters.hasFilters && activeFilters.descriptions.length > 0 ? `
+      <div class="hon-active-filters">
+        <span class="hon-filter-icon">🔍</span>
+        <span class="hon-filter-text">Active Filters: ${activeFilters.descriptions.join(', ')}</span>
+      </div>
+    ` : '';
+    
     // For images, hide mode selection (only use Swiss mode)
     const showModeToggle = battleType !== "images";
     const modeToggleHTML = showModeToggle ? `
@@ -2070,6 +2249,7 @@ async function fetchPerformerCount(performerFilter = {}) {
         <div class="hon-header">
           <h1 class="hon-title">🔥 HotOrNot</h1>
           <p class="hon-subtitle">Compare ${itemType} head-to-head to build your rankings</p>
+          ${filterBadgeHTML}
           ${modeToggleHTML}
         </div>
 
