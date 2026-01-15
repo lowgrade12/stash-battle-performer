@@ -1001,12 +1001,15 @@ async function fetchPerformerCount(performerFilter = {}) {
       if (savedFilter) {
         const parsedFilter = JSON.parse(savedFilter);
         // Use the criteria from the saved filter if it exists
+        // Note: This returns the user's exact filter without forcing image exclusion.
+        // This is intentional - if users want to exclude performers without images,
+        // they can set that filter on the performers page. The UI handles missing images gracefully.
         if (parsedFilter && parsedFilter.criteria) {
           return parsedFilter.criteria;
         }
       }
     } catch (e) {
-      console.warn('[HotOrNot] Failed to read performer filter from localStorage:', e);
+      console.warn('[HotOrNot] Failed to read performer filter from localStorage:', e.message || e);
     }
     
     // Fallback: Only exclude performers without images
