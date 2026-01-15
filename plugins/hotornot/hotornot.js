@@ -580,6 +580,7 @@ async function fetchSceneCount() {
     
     // Update stats if performer object provided (won can be true/false/null)
     // won=true: winner with full stats, won=false: loser with full stats, won=null: participation only (no win/loss)
+    // Check for won !== undefined to handle all three cases (true, false, null)
     if (performerObj && battleType === "performers" && won !== undefined) {
       const currentStats = parsePerformerEloData(performerObj);
       
