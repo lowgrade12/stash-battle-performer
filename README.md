@@ -40,7 +40,7 @@ Optional Step: Change Rating System Type to "Decimal" (Settings â†’ Interface â†
 5. Click on a performer (or use arrow keys) to pick the winner
 6. Watch your rankings evolve over time!
 
-**Filter Support:** The plugin automatically uses whatever filters you have active on the performers page. This allows you to compare only specific performers (e.g., by gender, age range, tags, etc.). If no filters are set, it will default to excluding performers without profile images.
+**Filter Support:** The plugin automatically uses whatever filters you have active on the performers page. This allows you to compare only specific performers (e.g., by gender, age range, tags, etc.). If no filters are set, it will default to the original behavior: excluding male performers and performers without profile images.
 
 ### For Images:
 1. Navigate to the **Images** page in Stash
