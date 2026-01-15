@@ -1807,6 +1807,12 @@ async function fetchPerformerCount(performerFilter = {}) {
   async function fetchSwissPairPerformers() {
     const performerFilter = getPerformerFilter();
     
+    // For large performer pools (>1000), use sampling for performance
+    // For smaller pools, still get all for accurate ranking
+    const totalPerformers = await fetchPerformerCount(performerFilter);
+    const useSampling = totalPerformers > 1000;
+    const sampleSize = useSampling ? Math.min(500, totalPerformers) : totalPerformers;
+    
     const performersQuery = `
       query FindPerformersByRating($performer_filter: PerformerFilterType, $filter: FindFilterType) {
         findPerformers(performer_filter: $performer_filter, filter: $filter) {
@@ -1817,13 +1823,13 @@ async function fetchPerformerCount(performerFilter = {}) {
       }
     `;
 
-    // Get all performers sorted by rating for accurate ranking and better matches
+    // Get performers - either all or a random sample
     const result = await graphqlQuery(performersQuery, {
       performer_filter: performerFilter,
       filter: {
-        per_page: -1, // Get all performers
-        sort: "rating",
-        direction: "DESC"
+        per_page: sampleSize,
+        sort: useSampling ? "random" : "rating",
+        direction: useSampling ? undefined : "DESC"
       }
     });
 
