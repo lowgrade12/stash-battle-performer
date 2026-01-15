@@ -10,7 +10,7 @@ A head-to-head comparison plugin that helps you rank performers and images.
 - **Three Comparison Modes (Performers only):**
   - **Swiss** ⚖️ – Fair matchups between similarly-rated items. Both ratings adjust based on the outcome. Recently matched performers are less likely to reappear (but not excluded) to reduce repetition.
   - **Gauntlet** 🎯 – Place a random performer in your rankings. They climb from the bottom, challenging each performer above them until they lose, then settle into their final position.
-  - **Champion** 🏆 – Winner stays on. The winning performer keeps battling until they're dethroned.
+  - **Champion** 🏆 – Winner stays on. The winning performer keeps battling until they're dethroned. Both performers' ratings and stats are updated, but at a reduced rate (50% of Swiss mode) to maintain more stable rankings while still allowing gradual adjustments.
 - **Swiss Mode for Images:**
   - Images use Swiss mode exclusively for optimal performance with large libraries (177,000+ images tested).
   - Intelligent sampling ensures fast comparisons even with massive image collections.
@@ -85,12 +85,16 @@ Building on the match count tracking, the plugin now tracks detailed statistics 
 Stats are stored in the `hotornot_stats` custom field and work seamlessly with all three comparison modes (Swiss, Gauntlet, Champion).
 
 **Mode-Specific Stat Tracking:**
-- **Swiss Mode**: Both participants get full stats tracked (wins, losses, streaks)
-- **Gauntlet/Champion Mode**: 
+- **Swiss Mode**: Both participants get full stats tracked (wins, losses, streaks). Ratings change at normal rate based on K-factor.
+- **Gauntlet Mode**: 
   - Active champion/falling performer gets full stats tracked
   - Defenders get participation tracking only (match count and timestamp)
   - Defenders' wins/losses/streaks are NOT updated (they're benchmarks)
   - This ensures accurate match counts for K-factor calculation while preserving the gauntlet concept
+- **Champion Mode**:
+  - Both participants get full stats tracked (wins, losses, streaks)
+  - Both performers' ratings are updated at a reduced rate (50% of Swiss mode K-factor)
+  - This allows rankings to evolve gradually while maintaining the "winner stays on" excitement
 
 **Recency Weighting (Swiss Mode):**
 In Swiss mode, performer selection uses the `last_match` timestamp to reduce (but not eliminate) recently-matched performers:

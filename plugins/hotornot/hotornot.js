@@ -682,7 +682,7 @@ async function fetchSceneCount() {
   /**
    * Update performer stats after a match
    * @param {Object} currentStats - Current stats object from parsePerformerEloData
-   * @param {boolean|null} won - True if performer won, false if lost, null for participation-only (no win/loss tracking)
+   * @param {boolean|null} won - True if performer won, false if lost, null for participation-only (no win/loss tracking, gauntlet mode defenders only)
    * @returns {Object} Updated stats object
    */
   function updatePerformerStats(currentStats, won) {
@@ -692,7 +692,7 @@ async function fetchSceneCount() {
       last_match: new Date().toISOString()
     };
     
-    // If won is null, this is participation-only (gauntlet/champion defender benchmark)
+    // If won is null, this is participation-only (gauntlet mode defender benchmark only)
     // Only increment match count and timestamp, don't track win/loss or streaks
     if (won === null) {
       newStats.wins = currentStats.wins;
@@ -733,72 +733,97 @@ async function fetchSceneCount() {
   }
 
   /**
-   * Calculate K-factor based on match count (experience)
+   * Calculate K-factor based on match count (experience) and mode
    * @param {number} currentRating - Current ELO rating
    * @param {number} matchCount - Number of matches played
+   * @param {string} mode - Current game mode ("swiss", "gauntlet", "champion")
    * @returns {number} K-factor value
    */
-  function getKFactor(currentRating, matchCount = null) {
+  function getKFactor(currentRating, matchCount = null, mode = "swiss") {
+    let baseKFactor;
+    
     // If match count is available, use it for more accurate K-factor
     if (matchCount !== null && matchCount !== undefined) {
       // New performers: High K-factor for fast convergence
       if (matchCount < 10) {
-        return 16;
+        baseKFactor = 16;
       }
-      
       // Moderately established: Medium K-factor
-      if (matchCount < 30) {
-        return 12;
+      else if (matchCount < 30) {
+        baseKFactor = 12;
       }
-      
       // Well-established (30+ matches): Low K-factor for stability
-      return 8;
-    }
-    
-    // Fallback to rating-based heuristic (legacy behavior)
-    // Items near the default rating (50) are likely less established
-    // Items far from 50 have likely had more comparisons
-    const distanceFromDefault = Math.abs(currentRating - 50);
-    
-    if (distanceFromDefault < 10) {
-      return 12;  // Higher K for unproven items near default
-    } else if (distanceFromDefault < 25) {
-      return 10;  // Medium K for moderately established items
+      else {
+        baseKFactor = 8;
+      }
     } else {
-      return 8;   // Lower K for well-established items
+      // Fallback to rating-based heuristic (legacy behavior)
+      // Items near the default rating (50) are likely less established
+      // Items far from 50 have likely had more comparisons
+      const distanceFromDefault = Math.abs(currentRating - 50);
+      
+      if (distanceFromDefault < 10) {
+        baseKFactor = 12;  // Higher K for unproven items near default
+      } else if (distanceFromDefault < 25) {
+        baseKFactor = 10;  // Medium K for moderately established items
+      } else {
+        baseKFactor = 8;   // Lower K for well-established items
+      }
     }
+    
+    // Apply mode-specific multiplier
+    // Champion mode: 0.5x K-factor (half the rating change of Swiss mode)
+    // This allows ratings to update but at a much slower pace
+    if (mode === "champion") {
+      return Math.max(1, Math.round(baseKFactor * 0.5));
+    }
+    
+    // Swiss and gauntlet modes use full K-factor
+    return baseKFactor;
   }
 
   /**
-   * Check if a performer is an active participant in gauntlet/champion mode
+   * Check if a performer is an active participant in gauntlet mode
    * Active participants are those whose stats should be tracked
+   * Note: In champion mode, ALL participants are active (both get full stats)
    * @param {string} performerId - ID of the performer to check
    * @param {number|null} performerRank - Rank of the performer (null if not ranked)
    * @returns {boolean} True if performer's stats should be tracked
    */
   function isActiveParticipant(performerId, performerRank) {
     // In Swiss mode, all participants are active
-    if (currentMode !== "gauntlet" && currentMode !== "champion") {
+    if (currentMode === "swiss") {
       return true;
     }
     
-    // Check if this is the champion
-    const isChampion = gauntletChampion && performerId === gauntletChampion.id;
-    
-    // Check if this is the falling performer
-    const isFalling = gauntletFalling && gauntletFallingItem && performerId === gauntletFallingItem.id;
-    
-    // Champion or falling performer are always active
-    if (isChampion || isFalling) {
+    // In Champion mode, all participants are active (both get full stats tracked)
+    if (currentMode === "champion") {
       return true;
     }
     
-    // Defender at rank #1 who is being challenged is also active (they can lose rating)
-    if (performerRank === 1) {
-      return true;
+    // In Gauntlet mode, only champion/falling performers are active
+    if (currentMode === "gauntlet") {
+      // Check if this is the champion
+      const isChampion = gauntletChampion && performerId === gauntletChampion.id;
+      
+      // Check if this is the falling performer
+      const isFalling = gauntletFalling && gauntletFallingItem && performerId === gauntletFallingItem.id;
+      
+      // Champion or falling performer are always active
+      if (isChampion || isFalling) {
+        return true;
+      }
+      
+      // Defender at rank #1 who is being challenged is also active (they can lose rating)
+      if (performerRank === 1) {
+        return true;
+      }
+      
+      // All other defenders are not active (they're just benchmarks)
+      return false;
     }
     
-    // All other defenders are not active (they're just benchmarks)
+    // Default: not active
     return false;
   }
 
@@ -838,8 +863,8 @@ async function fetchSceneCount() {
     
     let winnerGain = 0, loserLoss = 0;
     
-    if (currentMode === "gauntlet" || currentMode === "champion") {
-      // In gauntlet/champion, only the champion/falling scene changes rating
+    if (currentMode === "gauntlet") {
+      // In gauntlet, only the champion/falling scene changes rating
       // Defenders stay the same (they're just benchmarks)
       // EXCEPT: if the defender is rank #1, they lose 1 point when defeated
       const isChampionWinner = gauntletChampion && winnerId === gauntletChampion.id;
@@ -848,7 +873,7 @@ async function fetchSceneCount() {
       const isFallingLoser = gauntletFalling && gauntletFallingItem && loserId === gauntletFallingItem.id;
       
       const expectedWinner = 1 / (1 + Math.pow(10, ratingDiff / 40));
-      const kFactor = getKFactor(winnerRating, winnerMatchCount);
+      const kFactor = getKFactor(winnerRating, winnerMatchCount, "gauntlet");
       
       // Only the active scene (champion or falling) gets rating changes
       if (isChampionWinner || isFallingWinner) {
@@ -862,13 +887,25 @@ async function fetchSceneCount() {
       if (loserRank === 1 && !isChampionLoser && !isFallingLoser) {
         loserLoss = 1;
       }
+    } else if (currentMode === "champion") {
+      // Champion mode: Both performers get rating updates, but at a reduced rate (50% of Swiss mode)
+      // This allows rankings to evolve while still maintaining the "winner stays on" feel
+      const expectedWinner = 1 / (1 + Math.pow(10, ratingDiff / 40));
+      
+      // Use individual K-factors for each performer with champion mode multiplier
+      const winnerK = getKFactor(winnerRating, winnerMatchCount, "champion");
+      const loserK = getKFactor(loserRating, loserMatchCount, "champion");
+      
+      // Calculate changes using their respective K-factors (reduced by 50% for champion mode)
+      winnerGain = Math.max(0, Math.round(winnerK * (1 - expectedWinner)));
+      loserLoss = Math.max(0, Math.round(loserK * expectedWinner));
     } else {
       // Swiss mode: True ELO - both change based on expected outcome
       const expectedWinner = 1 / (1 + Math.pow(10, ratingDiff / 40));
       
       // Use individual K-factors for each performer for more accurate adjustments
-      const winnerK = getKFactor(winnerRating, winnerMatchCount);
-      const loserK = getKFactor(loserRating, loserMatchCount);
+      const winnerK = getKFactor(winnerRating, winnerMatchCount, "swiss");
+      const loserK = getKFactor(loserRating, loserMatchCount, "swiss");
       
       // Calculate changes using their respective K-factors
       winnerGain = Math.max(0, Math.round(winnerK * (1 - expectedWinner)));
@@ -892,14 +929,14 @@ async function fetchSceneCount() {
     // Update items in Stash
     // Pass win/loss status for stats tracking:
     // - true/false for active participants (track full stats)
-    // - null for defenders in gauntlet/champion mode (track participation only)
+    // - null for defenders in gauntlet mode only (track participation only)
     
     // Winner updates
     if (winnerChange !== 0 || (battleType === "performers" && freshWinnerObj && shouldTrackWinner)) {
       // Update rating if changed, or always update stats if active participant
       updateItemRating(winnerId, newWinnerRating, shouldTrackWinner ? freshWinnerObj : null, shouldTrackWinner ? true : null);
-    } else if (battleType === "performers" && freshWinnerObj && (currentMode === "gauntlet" || currentMode === "champion")) {
-      // Defender in gauntlet/champion mode - track participation only
+    } else if (battleType === "performers" && freshWinnerObj && currentMode === "gauntlet") {
+      // Defender in gauntlet mode only - track participation only
       updateItemRating(winnerId, newWinnerRating, freshWinnerObj, null);
     }
     
@@ -907,8 +944,8 @@ async function fetchSceneCount() {
     if (loserChange !== 0 || (battleType === "performers" && freshLoserObj && shouldTrackLoser)) {
       // Update rating if changed, or always update stats if active participant
       updateItemRating(loserId, newLoserRating, shouldTrackLoser ? freshLoserObj : null, shouldTrackLoser ? false : null);
-    } else if (battleType === "performers" && freshLoserObj && (currentMode === "gauntlet" || currentMode === "champion")) {
-      // Defender in gauntlet/champion mode - track participation only
+    } else if (battleType === "performers" && freshLoserObj && currentMode === "gauntlet") {
+      // Defender in gauntlet mode only - track participation only
       updateItemRating(loserId, newLoserRating, freshLoserObj, null);
     }
     
