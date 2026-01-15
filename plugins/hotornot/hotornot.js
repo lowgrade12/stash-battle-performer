@@ -1163,9 +1163,13 @@ async function fetchPerformerCount(performerFilter = {}) {
         }
         
         // Basic validation: criterion values should be objects, strings, numbers, or arrays
-        const valueType = typeof criterion.value;
-        if (valueType !== 'object' && valueType !== 'string' && valueType !== 'number' && !Array.isArray(criterion.value)) {
-          console.warn(`[HotOrNot] Criterion "${criterion.type}" has unexpected value type: ${valueType}, skipping`);
+        // Note: Arrays are objects in JavaScript, so check Array.isArray first
+        if (!Array.isArray(criterion.value) && 
+            typeof criterion.value !== 'object' && 
+            typeof criterion.value !== 'string' && 
+            typeof criterion.value !== 'number' && 
+            typeof criterion.value !== 'boolean') {
+          console.warn(`[HotOrNot] Criterion "${criterion.type}" has unexpected value type: ${typeof criterion.value}, skipping`);
           return;
         }
         
@@ -1239,7 +1243,12 @@ async function fetchPerformerCount(performerFilter = {}) {
     throw new Error("Not enough performers for comparison. You need at least 2 performers.");
   }
 
-  const shuffled = allPerformers.sort(() => Math.random() - 0.5);
+  // Fisher-Yates shuffle for proper randomization
+  const shuffled = [...allPerformers];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
   return shuffled.slice(0, 2);
 }
 
@@ -1250,7 +1259,7 @@ async function fetchPerformerCount(performerFilter = {}) {
    */
   async function fetchPerformerById(performerId) {
     // Validate performerId is a valid non-empty string
-    if (!performerId?.trim?.()) {
+    if (!performerId || typeof performerId !== 'string' || !performerId.trim()) {
       return null;
     }
     
