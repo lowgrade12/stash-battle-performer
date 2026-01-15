@@ -149,9 +149,9 @@ To test the filter reading:
 ## Code Location
 
 All filter reading code is in `/plugins/hotornot/hotornot.js`:
-- Lines ~980-1130: Filter reading utilities
-- Lines ~1149-1176: Updated `getPerformerFilter()` function
-- Lines ~2212-2275: UI with filter badge
+- Lines ~985-1220: Filter reading utilities (parseStashFilterParam, readFiltersFromURL, readFiltersFromDOM, getActiveFilters, convertToPerformerFilter)
+- Lines ~1230-1255: Updated `getPerformerFilter()` function with filter merging logic
+- Lines ~2293-2360: UI with filter badge in createMainUI()
 
 CSS styles in `/plugins/hotornot/hotornot.css`:
 - Lines ~32-48: Active filter badge styles

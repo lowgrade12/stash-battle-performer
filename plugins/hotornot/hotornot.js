@@ -1143,7 +1143,8 @@ async function fetchSceneCount() {
       // Note: Use parseFloat to support decimal ratings (e.g., 87.5)
       if (criteria.type === 'rating100' && criteria.value?.value !== undefined) {
         const ratingValue = parseFloat(criteria.value.value);
-        if (!isNaN(ratingValue)) {
+        // Validate rating is a number and within valid range (0-100)
+        if (!isNaN(ratingValue) && ratingValue >= 0 && ratingValue <= 100) {
           filter.rating100 = {
             value: ratingValue,
             modifier: criteria.modifier || 'EQUALS'
