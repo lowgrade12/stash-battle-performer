@@ -290,11 +290,20 @@
     // The filter structure varies based on the criterion type
     switch (type) {
       case 'tags':
-        // Tags filter: value contains items (tag IDs) and depth
+        // Tags filter: value contains items (tag IDs or tag objects) and depth
+        // Stash URL criteria may send items as objects like {id: "1", label: "JAV"}
+        // or just strings/numbers representing IDs
         if (value && value.items && value.items.length > 0) {
+          // Extract IDs from items - handle both object format and direct ID format
+          const tagIds = value.items.map(item => {
+            if (typeof item === 'object' && item !== null && 'id' in item) {
+              return item.id;
+            }
+            return item;
+          });
           return {
             tags: {
-              value: value.items,
+              value: tagIds,
               modifier: modifier || 'INCLUDES',
               depth: value.depth || 0
             }
@@ -304,10 +313,19 @@
         
       case 'studios':
         // Studios filter
+        // Stash URL criteria may send items as objects like {id: "1", label: "Studio Name"}
+        // or just strings/numbers representing IDs
         if (value && value.items && value.items.length > 0) {
+          // Extract IDs from items - handle both object format and direct ID format
+          const studioIds = value.items.map(item => {
+            if (typeof item === 'object' && item !== null && 'id' in item) {
+              return item.id;
+            }
+            return item;
+          });
           return {
             studios: {
-              value: value.items,
+              value: studioIds,
               modifier: modifier || 'INCLUDES',
               depth: value.depth || 0
             }
@@ -318,8 +336,9 @@
       case 'gender':
         // Gender filter
         // Extract simple value from potential nested object (e.g., { "value": "FEMALE" } -> "FEMALE")
+        // Also handles array format (e.g., ["Female"] -> "Female" for EQUALS modifier)
         if (value) {
-          const genderValue = extractSimpleValue(value);
+          let genderValue = extractSimpleValue(value);
           if (genderValue) {
             const effectiveModifier = modifier || 'EQUALS';
             // Use value_list for array-based modifiers (INCLUDES, EXCLUDES, etc.)
@@ -338,14 +357,20 @@
                 }
               };
             } else {
-              // Normalize single gender value to valid GraphQL enum format
-              const normalizedValue = normalizeGenderValue(genderValue);
-              return {
-                gender: {
-                  value: normalizedValue,
-                  modifier: effectiveModifier
-                }
-              };
+              // For single-value modifiers, extract first element if genderValue is an array
+              if (Array.isArray(genderValue)) {
+                genderValue = genderValue.length > 0 ? genderValue[0] : null;
+              }
+              if (genderValue) {
+                // Normalize single gender value to valid GraphQL enum format
+                const normalizedValue = normalizeGenderValue(genderValue);
+                return {
+                  gender: {
+                    value: normalizedValue,
+                    modifier: effectiveModifier
+                  }
+                };
+              }
             }
           }
         }
