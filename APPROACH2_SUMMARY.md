@@ -36,18 +36,22 @@ Performers now track comprehensive statistics in the `hotornot_stats` custom fie
 ### 3. Mode-Specific Behavior
 
 #### Swiss Mode
-- Both participants get stats tracked
-- Winner and loser both have their statistics updated
+- Both participants get full stats tracked
+- Winner and loser both have their statistics updated (wins/losses/streaks)
 - True head-to-head comparison
 
 #### Gauntlet Mode
-- Only the active champion or falling performer gets stats tracked
-- Defenders are benchmarks - their stats don't update
-- Exception: Rank #1 defenders get their loss tracked when dethroned
+- **Match participation tracked for both performers**
+- Active champion/falling performer gets full stats (wins/losses/streaks)
+- Defenders get participation tracking only (total_matches and last_match timestamp)
+- Defenders' wins/losses/streaks are NOT updated (they're benchmarks)
+- Exception: Rank #1 defenders get their loss fully tracked when dethroned
 
 #### Champion Mode
 - Same behavior as Gauntlet mode
-- Winner stays on, stats tracked for active participant only
+- Match participation tracked for both performers
+- Winner stays on, full stats tracked for active participant only
+- Defenders get participation-only tracking
 
 ### 4. Backward Compatibility
 

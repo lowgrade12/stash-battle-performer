@@ -84,6 +84,14 @@ Building on the match count tracking, the plugin now tracks detailed statistics 
 
 Stats are stored in the `hotornot_stats` custom field and work seamlessly with all three comparison modes (Swiss, Gauntlet, Champion).
 
+**Mode-Specific Stat Tracking:**
+- **Swiss Mode**: Both participants get full stats tracked (wins, losses, streaks)
+- **Gauntlet/Champion Mode**: 
+  - Active champion/falling performer gets full stats tracked
+  - Defenders get participation tracking only (match count and timestamp)
+  - Defenders' wins/losses/streaks are NOT updated (they're benchmarks)
+  - This ensures accurate match counts for K-factor calculation while preserving the gauntlet concept
+
 **Recency Weighting (Swiss Mode):**
 In Swiss mode, performer selection uses the `last_match` timestamp to reduce (but not eliminate) recently-matched performers:
 - 0-1 hours ago: Very unlikely (~4% chance)
