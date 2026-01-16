@@ -128,36 +128,43 @@
           allParsedCriteria.push(...result);
         } catch (e) {
           // If not valid JSON, it might be the newer Stash encoding
-          // Try parsing as a single criterion object string
-          // Format: {"type":"tags","value":{"items":["id1","id2"],"depth":0},"modifier":"INCLUDES"}
+          // Stash may encode criteria with parentheses instead of curly braces
+          // Format: ("type":"tags","value":("items":[...],"depth":0),"modifier":"INCLUDES")
           
-          // Multiple criteria are separated - split by },{ or ),( pattern (without lookbehind for compatibility)
-          // Stash may use parentheses instead of curly braces in some encoding formats
-          // Replace },{ or ),( with a unique delimiter, then split
-          const delimiter = '|||SPLIT|||';
-          // Handle both curly braces and parentheses as delimiters between criteria
-          let withDelimiter = decoded.replace(/\}\s*,?\s*\{/g, '}' + delimiter + '{');
-          withDelimiter = withDelimiter.replace(/\)\s*,?\s*\(/g, ')' + delimiter + '(');
-          const criteriaStrings = withDelimiter.split(delimiter);
+          // FIRST: Normalize ALL parentheses to curly braces before any splitting
+          // This must happen before splitting because the split pattern ),(
+          // also appears inside array elements like: [("id":"1"),("id":"2")]
+          //
+          // NOTE: This is safe because we only reach this code if standard JSON.parse failed
+          // at line 125. If the input had properly quoted strings with parentheses (e.g.,
+          // "label":"Action (2023)"), it would have parsed successfully in the first attempt.
+          // Stash only uses parentheses to replace structural braces, not within string values.
+          let normalized = decoded.trim();
+          normalized = normalized.replace(/\(/g, '{');
+          normalized = normalized.replace(/\)/g, '}');
           
-          for (const criteriaStr of criteriaStrings) {
-            try {
-              // Stash may encode criteria with parentheses instead of curly braces
-              // Convert ALL parentheses to curly braces for JSON parsing (including nested ones)
-              // NOTE: This is safe because we only reach this code if standard JSON.parse failed
-              // at line 125, meaning the input is not valid JSON. If it had properly quoted
-              // strings with parentheses, it would have parsed successfully in the first attempt.
-              let normalized = criteriaStr.trim();
-              // Replace all opening parentheses with curly braces
-              normalized = normalized.replace(/\(/g, '{');
-              // Replace all closing parentheses with curly braces
-              normalized = normalized.replace(/\)/g, '}');
-              const criterion = JSON.parse(normalized);
-              if (criterion && criterion.type) {
-                allParsedCriteria.push(criterion);
+          // Try parsing the normalized string as JSON
+          try {
+            const criteria = JSON.parse(normalized);
+            const result = Array.isArray(criteria) ? criteria : [criteria];
+            console.log('[HotOrNot] Parsed normalized criteria as JSON:', result);
+            allParsedCriteria.push(...result);
+          } catch (parseErr) {
+            // If still not valid JSON, try splitting on },{ pattern
+            // (only after normalization to avoid splitting inside arrays)
+            const delimiter = '|||SPLIT|||';
+            const withDelimiter = normalized.replace(/\}\s*,?\s*\{/g, '}' + delimiter + '{');
+            const criteriaStrings = withDelimiter.split(delimiter);
+            
+            for (const criteriaStr of criteriaStrings) {
+              try {
+                const criterion = JSON.parse(criteriaStr.trim());
+                if (criterion && criterion.type) {
+                  allParsedCriteria.push(criterion);
+                }
+              } catch (splitParseErr) {
+                console.warn('[HotOrNot] Could not parse criterion:', criteriaStr, splitParseErr);
               }
-            } catch (parseErr) {
-              console.warn('[HotOrNot] Could not parse criterion:', criteriaStr, parseErr);
             }
           }
         }
