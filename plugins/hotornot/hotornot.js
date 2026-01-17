@@ -2710,6 +2710,369 @@ async function fetchPerformerCount(performerFilter = {}) {
   // Images now use Swiss mode exclusively for optimal performance.
   // Gauntlet and Champion modes are only available for performers.
 
+  // ============================================
+  // PERFORMER STATS MODAL
+  // ============================================
+
+  /**
+   * Escape HTML special characters to prevent XSS
+   * @param {string} unsafe - Unsafe string that may contain HTML
+   * @returns {string} HTML-safe string
+   */
+  function escapeHtml(unsafe) {
+    if (!unsafe) return '';
+    return String(unsafe)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  /**
+   * Fetch all performers with stats and ratings
+   */
+  async function fetchAllPerformerStats() {
+    const performerFilter = getPerformerFilter();
+    const performersQuery = `
+      query FindAllPerformers($performer_filter: PerformerFilterType, $filter: FindFilterType) {
+        findPerformers(performer_filter: $performer_filter, filter: $filter) {
+          performers {
+            ${PERFORMER_FRAGMENT}
+          }
+        }
+      }
+    `;
+
+    const result = await graphqlQuery(performersQuery, {
+      performer_filter: performerFilter,
+      filter: {
+        per_page: -1,
+        sort: "rating",
+        direction: "DESC"
+      }
+    });
+
+    return result.findPerformers.performers || [];
+  }
+
+  /**
+   * Create stats breakdown modal content
+   */
+  function createStatsModalContent(performers) {
+    if (!performers || performers.length === 0) {
+      return '<div class="hon-stats-empty">No performer stats available</div>';
+    }
+
+    // Parse stats for each performer
+    const performersWithStats = performers.map((p, idx) => {
+      const stats = parsePerformerEloData(p);
+      return {
+        rank: idx + 1,
+        name: p.name || `Performer #${p.id}`,
+        id: p.id,
+        rating: ((p.rating100 || 50) / 10).toFixed(1),
+        ...stats
+      };
+    });
+
+    // Calculate totals and averages
+    const totalMatches = performersWithStats.reduce((sum, p) => sum + p.total_matches, 0);
+    const performerCount = performers.length;
+    const avgMatches = performerCount > 0 ? (totalMatches / performerCount).toFixed(1) : '0.0';
+    const avgRating = performerCount > 0 
+      ? ((performers.reduce((sum, p) => sum + (p.rating100 || 50), 0) / performerCount) / 10).toFixed(1) 
+      : '5.0';
+
+    // Calculate rating distribution for bar graph (100 individual rating values: 0.0, 0.1, 0.2, ..., 9.9)
+    // Create 100 buckets for granular distribution
+    const ratingBuckets = Array(100).fill(0);
+    performersWithStats.forEach(p => {
+      const ratingValue = parseFloat(p.rating); // Rating is 0.0-10.0
+      // Map rating to bucket index (0-99)
+      // Rating 10.0 goes into bucket 99 (displayed as 9.9)
+      const bucketIndex = Math.min(99, Math.floor(ratingValue * 10));
+      ratingBuckets[bucketIndex]++;
+    });
+    
+    const maxCount = Math.max(...ratingBuckets, 1);
+    
+    // Group buckets into 10 collapsible groups (0.0-1.0, 1.0-2.0, ..., 9.0-10.0)
+    const barGraphGroups = [];
+    for (let groupIndex = 0; groupIndex < 10; groupIndex++) {
+      const startRating = groupIndex;
+      const endRating = groupIndex + 1;
+      
+      // Get buckets for this group (10 buckets per group)
+      const groupBuckets = ratingBuckets.slice(groupIndex * 10, (groupIndex + 1) * 10);
+      const groupTotal = groupBuckets.reduce((sum, count) => sum + count, 0);
+      
+      // Create individual bars for this group
+      const barsInGroup = groupBuckets.map((count, bucketIndexInGroup) => {
+        const bucketIndex = groupIndex * 10 + bucketIndexInGroup;
+        const percentage = (count / maxCount) * 100;
+        const rangeStart = (bucketIndex / 10).toFixed(1);
+        const displayRange = `${rangeStart}`;
+        
+        return `
+          <div class="hon-bar-container">
+            <div class="hon-bar-label">${displayRange}</div>
+            <div class="hon-bar-wrapper">
+              <div class="hon-bar" style="width: ${percentage}%">
+                <span class="hon-bar-count">${count}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      barGraphGroups.push(`
+        <div class="hon-bar-group">
+          <div class="hon-bar-group-header" data-group="bar-${groupIndex}" role="button" aria-expanded="false" aria-controls="bar-group-${groupIndex}" aria-label="Toggle ratings ${startRating}.0 to ${endRating}.0 group">
+            <span class="hon-group-toggle">▶</span>
+            <span class="hon-bar-group-title">Ratings ${startRating}.0-${endRating}.0</span>
+            <span class="hon-bar-group-count">(${groupTotal} performers)</span>
+          </div>
+          <div class="hon-bar-group-content collapsed" data-group="bar-${groupIndex}" id="bar-group-${groupIndex}">
+            ${barsInGroup}
+          </div>
+        </div>
+      `);
+    }
+    
+    const barGraphHTML = barGraphGroups.join('');
+
+    // Group performers by 250 (1-250, 251-500, etc.)
+    const groupedPerformers = [];
+    for (let i = 0; i < performersWithStats.length; i += 250) {
+      const group = performersWithStats.slice(i, i + 250);
+      const startRank = i + 1;
+      const endRank = Math.min(i + 250, performersWithStats.length);
+      groupedPerformers.push({ startRank, endRank, performers: group });
+    }
+
+    // Create grouped table sections with expand/collapse
+    const groupedTableHTML = groupedPerformers.map((group, groupIndex) => {
+      const groupRows = group.performers.map(p => {
+        const winRate = p.total_matches > 0 ? ((p.wins / p.total_matches) * 100).toFixed(1) : 'N/A';
+        const streakDisplay = p.current_streak > 0 
+          ? `<span class="hon-stats-positive">+${p.current_streak}</span>` 
+          : p.current_streak < 0 
+            ? `<span class="hon-stats-negative">${p.current_streak}</span>`
+            : '0';
+        
+        // Escape performer name to prevent XSS
+        const safeName = escapeHtml(p.name);
+        
+        return `
+          <tr>
+            <td class="hon-stats-rank">#${p.rank}</td>
+            <td class="hon-stats-name">
+              <a href="/performers/${escapeHtml(p.id)}" target="_blank">${safeName}</a>
+            </td>
+            <td class="hon-stats-rating">${p.rating}</td>
+            <td>${p.total_matches}</td>
+            <td class="hon-stats-positive">${p.wins}</td>
+            <td class="hon-stats-negative">${p.losses}</td>
+            <td>${winRate}${winRate !== 'N/A' ? '%' : ''}</td>
+            <td>${streakDisplay}</td>
+            <td class="hon-stats-positive">${p.best_streak}</td>
+            <td class="hon-stats-negative">${p.worst_streak}</td>
+          </tr>
+        `;
+      }).join('');
+
+      return `
+        <div class="hon-rank-group">
+          <div class="hon-rank-group-header" data-group="${groupIndex}" role="button" aria-expanded="false" aria-controls="rank-group-${groupIndex}" aria-label="Toggle ranks ${group.startRank} to ${group.endRank} group">
+            <span class="hon-group-toggle">▶</span>
+            <span class="hon-rank-group-title">Ranks ${group.startRank}-${group.endRank}</span>
+            <span class="hon-rank-group-count">(${group.performers.length} performers)</span>
+          </div>
+          <div class="hon-rank-group-content collapsed" data-group="${groupIndex}" id="rank-group-${groupIndex}">
+            <table class="hon-stats-table" role="table" aria-label="Ranks ${group.startRank}-${group.endRank} statistics">
+              <tbody>
+                ${groupRows}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="hon-stats-modal-content">
+        <h2 class="hon-stats-title">📊 Performer Statistics</h2>
+        
+        <div class="hon-stats-summary">
+          <div class="hon-stats-summary-item">
+            <span class="hon-stats-summary-label">Total Performers:</span>
+            <span class="hon-stats-summary-value">${performers.length}</span>
+          </div>
+          <div class="hon-stats-summary-item">
+            <span class="hon-stats-summary-label">Total Matches:</span>
+            <span class="hon-stats-summary-value">${totalMatches}</span>
+          </div>
+          <div class="hon-stats-summary-item">
+            <span class="hon-stats-summary-label">Average Matches/Performer:</span>
+            <span class="hon-stats-summary-value">${avgMatches}</span>
+          </div>
+          <div class="hon-stats-summary-item">
+            <span class="hon-stats-summary-label">Average Rating:</span>
+            <span class="hon-stats-summary-value">${avgRating}/10</span>
+          </div>
+        </div>
+
+        <div class="hon-stats-tabs">
+          <button class="hon-stats-tab active" data-tab="graph">📊 Distribution</button>
+          <button class="hon-stats-tab" data-tab="leaderboard">📋 Leaderboard</button>
+        </div>
+
+        <div class="hon-stats-tab-content">
+          <div class="hon-stats-tab-panel active" data-panel="graph">
+            <div class="hon-bar-graph">
+              <h3 class="hon-bar-graph-title">Rating Distribution</h3>
+              <div class="hon-bar-graph-content">
+                ${barGraphHTML}
+              </div>
+            </div>
+          </div>
+
+          <div class="hon-stats-tab-panel" data-panel="leaderboard">
+            <div class="hon-stats-table-container">
+              <table class="hon-stats-table hon-stats-table-header" role="table" aria-label="Performer statistics breakdown">
+                <thead>
+                  <tr>
+                    <th scope="col" aria-label="Rank position">Rank</th>
+                    <th scope="col" aria-label="Performer name">Performer</th>
+                    <th scope="col" aria-label="Current rating">Rating</th>
+                    <th scope="col" aria-label="Total matches played">Matches</th>
+                    <th scope="col" aria-label="Total wins">Wins</th>
+                    <th scope="col" aria-label="Total losses">Losses</th>
+                    <th scope="col" aria-label="Win rate percentage">Win Rate</th>
+                    <th scope="col" aria-label="Current win or loss streak">Streak</th>
+                    <th scope="col" aria-label="Best winning streak">Best</th>
+                    <th scope="col" aria-label="Worst losing streak">Worst</th>
+                  </tr>
+                </thead>
+              </table>
+              <div class="hon-rank-groups">
+                ${groupedTableHTML}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Open stats modal
+   */
+  async function openStatsModal() {
+    const existingStatsModal = document.getElementById("hon-stats-modal");
+    if (existingStatsModal) {
+      existingStatsModal.remove();
+    }
+
+    const statsModal = document.createElement("div");
+    statsModal.id = "hon-stats-modal";
+    statsModal.className = "hon-stats-modal";
+    statsModal.innerHTML = `
+      <div class="hon-modal-backdrop"></div>
+      <div class="hon-stats-modal-dialog">
+        <button class="hon-modal-close">✕</button>
+        <div class="hon-stats-loading">Loading stats...</div>
+      </div>
+    `;
+
+    document.body.appendChild(statsModal);
+
+    // Close handlers
+    statsModal.querySelector(".hon-modal-backdrop").addEventListener("click", () => {
+      statsModal.remove();
+    });
+    statsModal.querySelector(".hon-modal-close").addEventListener("click", () => {
+      statsModal.remove();
+    });
+
+    // Fetch and display stats
+    try {
+      const performers = await fetchAllPerformerStats();
+      const content = createStatsModalContent(performers);
+      const dialog = statsModal.querySelector(".hon-stats-modal-dialog");
+      dialog.innerHTML = `
+        <button class="hon-modal-close">✕</button>
+        ${content}
+      `;
+
+      // Re-attach close handler after updating content
+      dialog.querySelector(".hon-modal-close").addEventListener("click", () => {
+        statsModal.remove();
+      });
+
+      // Attach tab switching handlers
+      const tabButtons = dialog.querySelectorAll(".hon-stats-tab");
+      const tabPanels = dialog.querySelectorAll(".hon-stats-tab-panel");
+      
+      tabButtons.forEach(button => {
+        button.addEventListener("click", () => {
+          const tabName = button.dataset.tab;
+          
+          // Update active tab button
+          tabButtons.forEach(btn => btn.classList.remove("active"));
+          button.classList.add("active");
+          
+          // Update active tab panel
+          tabPanels.forEach(panel => {
+            if (panel.dataset.panel === tabName) {
+              panel.classList.add("active");
+            } else {
+              panel.classList.remove("active");
+            }
+          });
+        });
+      });
+
+      // Helper function to attach expand/collapse handlers to collapsible groups
+      const attachCollapseHandlers = (headerSelector, contentSelector) => {
+        const headers = dialog.querySelectorAll(headerSelector);
+        headers.forEach(header => {
+          header.addEventListener("click", () => {
+            const groupIndex = header.dataset.group;
+            const content = dialog.querySelector(`${contentSelector}[data-group="${groupIndex}"]`);
+            const toggle = header.querySelector(".hon-group-toggle");
+            
+            if (content && content.classList.contains("collapsed")) {
+              content.classList.remove("collapsed");
+              header.setAttribute("aria-expanded", "true");
+              toggle.textContent = "▼";
+            } else if (content) {
+              content.classList.add("collapsed");
+              header.setAttribute("aria-expanded", "false");
+              toggle.textContent = "▶";
+            }
+          });
+        });
+      };
+
+      // Attach expand/collapse handlers for rank groups and bar graph groups
+      attachCollapseHandlers(".hon-rank-group-header", ".hon-rank-group-content");
+      attachCollapseHandlers(".hon-bar-group-header", ".hon-bar-group-content");
+    } catch (error) {
+      console.error("[HotOrNot] Error loading stats:", error);
+      const dialog = statsModal.querySelector(".hon-stats-modal-dialog");
+      dialog.innerHTML = `
+        <button class="hon-modal-close">✕</button>
+        <div class="hon-stats-error">Failed to load performer statistics. Please try again later.</div>
+      `;
+      
+      dialog.querySelector(".hon-modal-close").addEventListener("click", () => {
+        statsModal.remove();
+      });
+    }
+  }
+
   function createMainUI() {
     const itemType = battleType === "performers" ? "performers" : (battleType === "images" ? "images" : "scenes");
     const itemTypeSingular = battleType === "performers" ? "performer" : (battleType === "images" ? "image" : "scene");
@@ -2736,12 +3099,20 @@ async function fetchPerformerCount(performerFilter = {}) {
           </div>
     ` : '';
     
+    // Stats button for performers
+    const statsButtonHTML = battleType === "performers" ? `
+          <button id="hon-stats-btn" class="btn btn-primary hon-stats-button">
+            📊 View All Stats
+          </button>
+    ` : '';
+    
     return `
       <div id="hotornot-container" class="hon-container">
         <div class="hon-header">
           <h1 class="hon-title">🔥 HotOrNot</h1>
           <p class="hon-subtitle">Compare ${itemType} head-to-head to build your rankings</p>
           ${modeToggleHTML}
+          ${statsButtonHTML}
         </div>
 
         <div id="hon-performer-selection" class="hon-performer-selection" style="display: none;">
@@ -3357,6 +3728,14 @@ function addFloatingButton() {
           gauntletFallingItem = null;
         }
         loadNewPair();
+      });
+    }
+
+    // Stats button (performers only)
+    const statsBtn = modal.querySelector("#hon-stats-btn");
+    if (statsBtn) {
+      statsBtn.addEventListener("click", () => {
+        openStatsModal();
       });
     }
 
