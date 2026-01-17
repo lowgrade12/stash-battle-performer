@@ -2,8 +2,8 @@
   name: HotOrNot
   metadata:
     description: Adds an ELO based ranking system for performers and images
-  version: 1.0.0-ecbd71d
-  date: 2026-01-14 19:40:53
+  version: 1.0.0-d9f1e24
+  date: 2026-01-16 00:00:29
   path: hotornot.zip
-  sha256: 4d63dae31d1acf32321a00cc54268d5a6e9d18c7239e0aff4ef853eb452be45b
+  sha256: c3ea4c9cc0ad419af4f51bcc3f9190c80808cf0a04cb5cda7eba6ee04eac56ed
 

@@ -121,10 +121,15 @@ In Swiss mode, performer selection uses the `last_match` timestamp to reduce (bu
 This ensures variety without completely excluding performers, so they can still appear if they're the best match rating-wise.
 
 **Performance Optimization for Large Libraries:**
-- Libraries with ≤1000 performers: Uses full dataset for accurate ranking
-- Libraries with >1000 performers: Uses intelligent sampling (500 performers) for fast performance
-- Recency weighting and rating-based matching work seamlessly in both modes
-- Optimized for libraries with 15,000+ performers
+- **Performers:** Always uses full dataset for accurate ranking across all library sizes
+- **Images:** Libraries with ≤1000 images use full dataset; >1000 images use intelligent sampling (500 images)
+- Recency weighting (performers) and rating-based matching work seamlessly in both modes
+- Optimized for libraries with 15,000+ performers and 177,000+ images
+
+**Performer Statistics:**
+- Click the "📊 View All Stats" button (performers only) to see comprehensive statistics
+- View breakdown across all rankings with wins, losses, streaks, and win rates
+- Statistics tracked in the `hotornot_stats` custom field for each performer
 
 **Technical Details:**
 - See [APPROACH2_IMPLEMENTATION.md](APPROACH2_IMPLEMENTATION.md) for implementation details

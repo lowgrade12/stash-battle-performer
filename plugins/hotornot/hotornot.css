@@ -914,3 +914,296 @@
     font-size: 0.75rem;
   }
 }
+
+/* ============================================
+   STATS MODAL & BUTTON
+   ============================================ */
+
+.hon-stats-button {
+  margin-top: 15px;
+  padding: 10px 20px;
+  font-size: 1rem;
+  border-radius: 8px;
+}
+
+.hon-stats-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hon-stats-modal-dialog {
+  position: relative;
+  background: #1a1a1a;
+  border-radius: 12px;
+  max-width: 95%;
+  max-height: 90vh;
+  width: 1200px;
+  overflow-y: auto;
+  padding: 30px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.hon-stats-title {
+  font-size: 2rem;
+  color: #fff;
+  margin: 0 0 20px 0;
+  text-align: center;
+}
+
+.hon-stats-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.hon-stats-summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.hon-stats-summary-label {
+  font-size: 0.9rem;
+  color: #888;
+  margin-bottom: 5px;
+}
+
+.hon-stats-summary-value {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #0d6efd;
+}
+
+.hon-stats-table-container {
+  overflow-x: auto;
+}
+
+.hon-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.hon-stats-table thead {
+  background: rgba(255, 255, 255, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.hon-stats-table th {
+  padding: 12px 8px;
+  text-align: left;
+  font-weight: 600;
+  color: #fff;
+  border-bottom: 2px solid #444;
+}
+
+.hon-stats-table td {
+  padding: 10px 8px;
+  color: #ccc;
+  border-bottom: 1px solid #333;
+}
+
+.hon-stats-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.hon-stats-rank {
+  font-weight: bold;
+  color: #ffc107;
+}
+
+.hon-stats-name a {
+  color: #0d6efd;
+  text-decoration: none;
+}
+
+.hon-stats-name a:hover {
+  text-decoration: underline;
+}
+
+.hon-stats-rating {
+  font-weight: bold;
+  color: #28a745;
+}
+
+.hon-stats-positive {
+  color: #28a745;
+}
+
+.hon-stats-negative {
+  color: #dc3545;
+}
+
+.hon-stats-loading,
+.hon-stats-empty,
+.hon-stats-error {
+  padding: 40px;
+  text-align: center;
+  color: #888;
+  font-size: 1.1rem;
+}
+
+.hon-stats-error {
+  color: #dc3545;
+}
+
+/* Stats Tabs */
+.hon-stats-tabs {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  border-bottom: 2px solid #444;
+}
+
+.hon-stats-tab {
+  padding: 12px 24px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #888;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.hon-stats-tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.hon-stats-tab.active {
+  color: #0d6efd;
+  border-bottom-color: #0d6efd;
+}
+
+.hon-stats-tab-content {
+  margin-top: 20px;
+}
+
+.hon-stats-tab-panel {
+  display: none;
+}
+
+.hon-stats-tab-panel.active {
+  display: block;
+}
+
+/* Bar Graph Styles */
+.hon-bar-graph {
+  padding: 20px;
+}
+
+.hon-bar-graph-title {
+  font-size: 1.3rem;
+  color: #fff;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.hon-bar-graph-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.hon-bar-container {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.hon-bar-label {
+  font-size: 0.95rem;
+  color: #aaa;
+  text-align: right;
+  font-weight: 500;
+}
+
+.hon-bar-wrapper {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  height: 32px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hon-bar {
+  background: linear-gradient(90deg, #0d6efd 0%, #0a58ca 100%);
+  height: 100%;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  transition: width 0.3s ease;
+  min-width: 40px;
+}
+
+.hon-bar-count {
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 768px) {
+  .hon-stats-modal-dialog {
+    max-width: 98%;
+    padding: 20px;
+  }
+  
+  .hon-stats-title {
+    font-size: 1.5rem;
+  }
+  
+  .hon-stats-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .hon-stats-table {
+    font-size: 0.85rem;
+  }
+  
+  .hon-stats-table th,
+  .hon-stats-table td {
+    padding: 8px 5px;
+  }
+
+  .hon-stats-tab {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+  }
+
+  .hon-bar-container {
+    grid-template-columns: 50px 1fr;
+  }
+
+  .hon-bar-label {
+    font-size: 0.85rem;
+  }
+
+  .hon-bar {
+    height: 28px;
+  }
+
+  .hon-bar-count {
+    font-size: 0.85rem;
+  }
+}

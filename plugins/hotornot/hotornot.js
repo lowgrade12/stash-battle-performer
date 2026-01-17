@@ -128,43 +128,36 @@
           allParsedCriteria.push(...result);
         } catch (e) {
           // If not valid JSON, it might be the newer Stash encoding
-          // Stash may encode criteria with parentheses instead of curly braces
-          // Format: ("type":"tags","value":("items":[...],"depth":0),"modifier":"INCLUDES")
+          // Try parsing as a single criterion object string
+          // Format: {"type":"tags","value":{"items":["id1","id2"],"depth":0},"modifier":"INCLUDES"}
           
-          // FIRST: Normalize ALL parentheses to curly braces before any splitting
-          // This must happen before splitting because the split pattern ),(
-          // also appears inside array elements like: [("id":"1"),("id":"2")]
-          //
-          // NOTE: This is safe because we only reach this code if standard JSON.parse failed
-          // at line 125. If the input had properly quoted strings with parentheses (e.g.,
-          // "label":"Action (2023)"), it would have parsed successfully in the first attempt.
-          // Stash only uses parentheses to replace structural braces, not within string values.
-          let normalized = decoded.trim();
-          normalized = normalized.replace(/\(/g, '{');
-          normalized = normalized.replace(/\)/g, '}');
+          // Multiple criteria are separated - split by },{ or ),( pattern (without lookbehind for compatibility)
+          // Stash may use parentheses instead of curly braces in some encoding formats
+          // Replace },{ or ),( with a unique delimiter, then split
+          const delimiter = '|||SPLIT|||';
+          // Handle both curly braces and parentheses as delimiters between criteria
+          let withDelimiter = decoded.replace(/\}\s*,?\s*\{/g, '}' + delimiter + '{');
+          withDelimiter = withDelimiter.replace(/\)\s*,?\s*\(/g, ')' + delimiter + '(');
+          const criteriaStrings = withDelimiter.split(delimiter);
           
-          // Try parsing the normalized string as JSON
-          try {
-            const criteria = JSON.parse(normalized);
-            const result = Array.isArray(criteria) ? criteria : [criteria];
-            console.log('[HotOrNot] Parsed normalized criteria as JSON:', result);
-            allParsedCriteria.push(...result);
-          } catch (parseErr) {
-            // If still not valid JSON, try splitting on },{ pattern
-            // (only after normalization to avoid splitting inside arrays)
-            const delimiter = '|||SPLIT|||';
-            const withDelimiter = normalized.replace(/\}\s*,?\s*\{/g, '}' + delimiter + '{');
-            const criteriaStrings = withDelimiter.split(delimiter);
-            
-            for (const criteriaStr of criteriaStrings) {
-              try {
-                const criterion = JSON.parse(criteriaStr.trim());
-                if (criterion && criterion.type) {
-                  allParsedCriteria.push(criterion);
-                }
-              } catch (splitParseErr) {
-                console.warn('[HotOrNot] Could not parse criterion:', criteriaStr, splitParseErr);
+          for (const criteriaStr of criteriaStrings) {
+            try {
+              // Stash may encode criteria with parentheses instead of curly braces
+              // Convert ALL parentheses to curly braces for JSON parsing (including nested ones)
+              // NOTE: This is safe because we only reach this code if standard JSON.parse failed
+              // at line 125, meaning the input is not valid JSON. If it had properly quoted
+              // strings with parentheses, it would have parsed successfully in the first attempt.
+              let normalized = criteriaStr.trim();
+              // Replace all opening parentheses with curly braces
+              normalized = normalized.replace(/\(/g, '{');
+              // Replace all closing parentheses with curly braces
+              normalized = normalized.replace(/\)/g, '}');
+              const criterion = JSON.parse(normalized);
+              if (criterion && criterion.type) {
+                allParsedCriteria.push(criterion);
               }
+            } catch (parseErr) {
+              console.warn('[HotOrNot] Could not parse criterion:', criteriaStr, parseErr);
             }
           }
         }
@@ -297,20 +290,11 @@
     // The filter structure varies based on the criterion type
     switch (type) {
       case 'tags':
-        // Tags filter: value contains items (tag IDs or tag objects) and depth
-        // Stash URL criteria may send items as objects like {id: "1", label: "JAV"}
-        // or just strings/numbers representing IDs
+        // Tags filter: value contains items (tag IDs) and depth
         if (value && value.items && value.items.length > 0) {
-          // Extract IDs from items - handle both object format and direct ID format
-          const tagIds = value.items.map(item => {
-            if (typeof item === 'object' && item !== null && 'id' in item) {
-              return item.id;
-            }
-            return item;
-          });
           return {
             tags: {
-              value: tagIds,
+              value: value.items,
               modifier: modifier || 'INCLUDES',
               depth: value.depth || 0
             }
@@ -320,19 +304,10 @@
         
       case 'studios':
         // Studios filter
-        // Stash URL criteria may send items as objects like {id: "1", label: "Studio Name"}
-        // or just strings/numbers representing IDs
         if (value && value.items && value.items.length > 0) {
-          // Extract IDs from items - handle both object format and direct ID format
-          const studioIds = value.items.map(item => {
-            if (typeof item === 'object' && item !== null && 'id' in item) {
-              return item.id;
-            }
-            return item;
-          });
           return {
             studios: {
-              value: studioIds,
+              value: value.items,
               modifier: modifier || 'INCLUDES',
               depth: value.depth || 0
             }
@@ -343,9 +318,8 @@
       case 'gender':
         // Gender filter
         // Extract simple value from potential nested object (e.g., { "value": "FEMALE" } -> "FEMALE")
-        // Also handles array format (e.g., ["Female"] -> "Female" for EQUALS modifier)
         if (value) {
-          let genderValue = extractSimpleValue(value);
+          const genderValue = extractSimpleValue(value);
           if (genderValue) {
             const effectiveModifier = modifier || 'EQUALS';
             // Use value_list for array-based modifiers (INCLUDES, EXCLUDES, etc.)
@@ -364,20 +338,14 @@
                 }
               };
             } else {
-              // For single-value modifiers, extract first element if genderValue is an array
-              if (Array.isArray(genderValue)) {
-                genderValue = genderValue.length > 0 ? genderValue[0] : null;
-              }
-              if (genderValue) {
-                // Normalize single gender value to valid GraphQL enum format
-                const normalizedValue = normalizeGenderValue(genderValue);
-                return {
-                  gender: {
-                    value: normalizedValue,
-                    modifier: effectiveModifier
-                  }
-                };
-              }
+              // Normalize single gender value to valid GraphQL enum format
+              const normalizedValue = normalizeGenderValue(genderValue);
+              return {
+                gender: {
+                  value: normalizedValue,
+                  modifier: effectiveModifier
+                }
+              };
             }
           }
         }
@@ -1839,12 +1807,6 @@ async function fetchPerformerCount(performerFilter = {}) {
   async function fetchSwissPairPerformers() {
     const performerFilter = getPerformerFilter();
     
-    // For large performer pools (>1000), use sampling for performance
-    // For smaller pools, still get all for accurate ranking
-    const totalPerformers = await fetchPerformerCount(performerFilter);
-    const useSampling = totalPerformers > 1000;
-    const sampleSize = useSampling ? Math.min(500, totalPerformers) : totalPerformers;
-    
     const performersQuery = `
       query FindPerformersByRating($performer_filter: PerformerFilterType, $filter: FindFilterType) {
         findPerformers(performer_filter: $performer_filter, filter: $filter) {
@@ -1855,13 +1817,13 @@ async function fetchPerformerCount(performerFilter = {}) {
       }
     `;
 
-    // Get performers - either all or a random sample
+    // Get all performers for accurate ranking
     const result = await graphqlQuery(performersQuery, {
       performer_filter: performerFilter,
       filter: {
-        per_page: sampleSize,
-        sort: useSampling ? "random" : "rating",
-        direction: useSampling ? undefined : "DESC"
+        per_page: -1,
+        sort: "rating",
+        direction: "DESC"
       }
     });
 
@@ -1948,8 +1910,7 @@ async function fetchPerformerCount(performerFilter = {}) {
 
     return { 
       performers: [performer1, performer2], 
-      // When using sampling, ranks are not meaningful (don't represent true position)
-      ranks: useSampling ? [null, null] : [randomIndex + 1, performer2Index + 1] 
+      ranks: [randomIndex + 1, performer2Index + 1] 
     };
   }
 
@@ -2710,6 +2671,281 @@ async function fetchPerformerCount(performerFilter = {}) {
   // Images now use Swiss mode exclusively for optimal performance.
   // Gauntlet and Champion modes are only available for performers.
 
+  // ============================================
+  // PERFORMER STATS MODAL
+  // ============================================
+
+  /**
+   * Escape HTML special characters to prevent XSS
+   * @param {string} unsafe - Unsafe string that may contain HTML
+   * @returns {string} HTML-safe string
+   */
+  function escapeHtml(unsafe) {
+    if (!unsafe) return '';
+    return String(unsafe)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  /**
+   * Fetch all performers with stats and ratings
+   */
+  async function fetchAllPerformerStats() {
+    const performerFilter = getPerformerFilter();
+    const performersQuery = `
+      query FindAllPerformers($performer_filter: PerformerFilterType, $filter: FindFilterType) {
+        findPerformers(performer_filter: $performer_filter, filter: $filter) {
+          performers {
+            ${PERFORMER_FRAGMENT}
+          }
+        }
+      }
+    `;
+
+    const result = await graphqlQuery(performersQuery, {
+      performer_filter: performerFilter,
+      filter: {
+        per_page: -1,
+        sort: "rating",
+        direction: "DESC"
+      }
+    });
+
+    return result.findPerformers.performers || [];
+  }
+
+  /**
+   * Create stats breakdown modal content
+   */
+  function createStatsModalContent(performers) {
+    if (!performers || performers.length === 0) {
+      return '<div class="hon-stats-empty">No performer stats available</div>';
+    }
+
+    // Parse stats for each performer
+    const performersWithStats = performers.map((p, idx) => {
+      const stats = parsePerformerEloData(p);
+      return {
+        rank: idx + 1,
+        name: p.name || `Performer #${p.id}`,
+        id: p.id,
+        rating: p.rating100 || 50,
+        ...stats
+      };
+    });
+
+    // Calculate totals and averages
+    const totalMatches = performersWithStats.reduce((sum, p) => sum + p.total_matches, 0);
+    const performerCount = performers.length;
+    const avgMatches = performerCount > 0 ? (totalMatches / performerCount).toFixed(1) : '0.0';
+    const avgRating = performerCount > 0 
+      ? (performers.reduce((sum, p) => sum + (p.rating100 || 50), 0) / performerCount).toFixed(1) 
+      : '50.0';
+
+    // Calculate rating distribution for bar graph (0-10, 10-20, ..., 90-100)
+    const ratingBuckets = Array(10).fill(0);
+    performersWithStats.forEach(p => {
+      const bucketIndex = Math.min(9, Math.floor(p.rating / 10));
+      ratingBuckets[bucketIndex]++;
+    });
+    
+    const maxCount = Math.max(...ratingBuckets, 1);
+    const barGraphHTML = ratingBuckets.map((count, idx) => {
+      const rangeStart = idx * 10;
+      const rangeEnd = (idx + 1) * 10;
+      const percentage = (count / maxCount) * 100;
+      return `
+        <div class="hon-bar-container">
+          <div class="hon-bar-label">${rangeStart}-${rangeEnd}</div>
+          <div class="hon-bar-wrapper">
+            <div class="hon-bar" style="width: ${percentage}%">
+              <span class="hon-bar-count">${count}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Create table rows for leaderboard
+    const tableRows = performersWithStats.map(p => {
+      const winRate = p.total_matches > 0 ? ((p.wins / p.total_matches) * 100).toFixed(1) : 'N/A';
+      const streakDisplay = p.current_streak > 0 
+        ? `<span class="hon-stats-positive">+${p.current_streak}</span>` 
+        : p.current_streak < 0 
+          ? `<span class="hon-stats-negative">${p.current_streak}</span>`
+          : '0';
+      
+      // Escape performer name to prevent XSS
+      const safeName = escapeHtml(p.name);
+      
+      return `
+        <tr>
+          <td class="hon-stats-rank">#${p.rank}</td>
+          <td class="hon-stats-name">
+            <a href="/performers/${escapeHtml(p.id)}" target="_blank">${safeName}</a>
+          </td>
+          <td class="hon-stats-rating">${p.rating}</td>
+          <td>${p.total_matches}</td>
+          <td class="hon-stats-positive">${p.wins}</td>
+          <td class="hon-stats-negative">${p.losses}</td>
+          <td>${winRate}${winRate !== 'N/A' ? '%' : ''}</td>
+          <td>${streakDisplay}</td>
+          <td class="hon-stats-positive">${p.best_streak}</td>
+          <td class="hon-stats-negative">${p.worst_streak}</td>
+        </tr>
+      `;
+    }).join('');
+
+    return `
+      <div class="hon-stats-modal-content">
+        <h2 class="hon-stats-title">📊 Performer Statistics</h2>
+        
+        <div class="hon-stats-summary">
+          <div class="hon-stats-summary-item">
+            <span class="hon-stats-summary-label">Total Performers:</span>
+            <span class="hon-stats-summary-value">${performers.length}</span>
+          </div>
+          <div class="hon-stats-summary-item">
+            <span class="hon-stats-summary-label">Total Matches:</span>
+            <span class="hon-stats-summary-value">${totalMatches}</span>
+          </div>
+          <div class="hon-stats-summary-item">
+            <span class="hon-stats-summary-label">Average Matches/Performer:</span>
+            <span class="hon-stats-summary-value">${avgMatches}</span>
+          </div>
+          <div class="hon-stats-summary-item">
+            <span class="hon-stats-summary-label">Average Rating:</span>
+            <span class="hon-stats-summary-value">${avgRating}/100</span>
+          </div>
+        </div>
+
+        <div class="hon-stats-tabs">
+          <button class="hon-stats-tab active" data-tab="graph">📊 Distribution</button>
+          <button class="hon-stats-tab" data-tab="leaderboard">📋 Leaderboard</button>
+        </div>
+
+        <div class="hon-stats-tab-content">
+          <div class="hon-stats-tab-panel active" data-panel="graph">
+            <div class="hon-bar-graph">
+              <h3 class="hon-bar-graph-title">Rating Distribution</h3>
+              <div class="hon-bar-graph-content">
+                ${barGraphHTML}
+              </div>
+            </div>
+          </div>
+
+          <div class="hon-stats-tab-panel" data-panel="leaderboard">
+            <div class="hon-stats-table-container">
+              <table class="hon-stats-table" role="table" aria-label="Performer statistics breakdown">
+                <thead>
+                  <tr>
+                    <th scope="col" aria-label="Rank position">Rank</th>
+                    <th scope="col" aria-label="Performer name">Performer</th>
+                    <th scope="col" aria-label="Current rating">Rating</th>
+                    <th scope="col" aria-label="Total matches played">Matches</th>
+                    <th scope="col" aria-label="Total wins">Wins</th>
+                    <th scope="col" aria-label="Total losses">Losses</th>
+                    <th scope="col" aria-label="Win rate percentage">Win Rate</th>
+                    <th scope="col" aria-label="Current win or loss streak">Streak</th>
+                    <th scope="col" aria-label="Best winning streak">Best</th>
+                    <th scope="col" aria-label="Worst losing streak">Worst</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${tableRows}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Open stats modal
+   */
+  async function openStatsModal() {
+    const existingStatsModal = document.getElementById("hon-stats-modal");
+    if (existingStatsModal) {
+      existingStatsModal.remove();
+    }
+
+    const statsModal = document.createElement("div");
+    statsModal.id = "hon-stats-modal";
+    statsModal.className = "hon-stats-modal";
+    statsModal.innerHTML = `
+      <div class="hon-modal-backdrop"></div>
+      <div class="hon-stats-modal-dialog">
+        <button class="hon-modal-close">✕</button>
+        <div class="hon-stats-loading">Loading stats...</div>
+      </div>
+    `;
+
+    document.body.appendChild(statsModal);
+
+    // Close handlers
+    statsModal.querySelector(".hon-modal-backdrop").addEventListener("click", () => {
+      statsModal.remove();
+    });
+    statsModal.querySelector(".hon-modal-close").addEventListener("click", () => {
+      statsModal.remove();
+    });
+
+    // Fetch and display stats
+    try {
+      const performers = await fetchAllPerformerStats();
+      const content = createStatsModalContent(performers);
+      const dialog = statsModal.querySelector(".hon-stats-modal-dialog");
+      dialog.innerHTML = `
+        <button class="hon-modal-close">✕</button>
+        ${content}
+      `;
+
+      // Re-attach close handler after updating content
+      dialog.querySelector(".hon-modal-close").addEventListener("click", () => {
+        statsModal.remove();
+      });
+
+      // Attach tab switching handlers
+      const tabButtons = dialog.querySelectorAll(".hon-stats-tab");
+      const tabPanels = dialog.querySelectorAll(".hon-stats-tab-panel");
+      
+      tabButtons.forEach(button => {
+        button.addEventListener("click", () => {
+          const tabName = button.dataset.tab;
+          
+          // Update active tab button
+          tabButtons.forEach(btn => btn.classList.remove("active"));
+          button.classList.add("active");
+          
+          // Update active tab panel
+          tabPanels.forEach(panel => {
+            if (panel.dataset.panel === tabName) {
+              panel.classList.add("active");
+            } else {
+              panel.classList.remove("active");
+            }
+          });
+        });
+      });
+    } catch (error) {
+      console.error("[HotOrNot] Error loading stats:", error);
+      const dialog = statsModal.querySelector(".hon-stats-modal-dialog");
+      dialog.innerHTML = `
+        <button class="hon-modal-close">✕</button>
+        <div class="hon-stats-error">Failed to load performer statistics. Please try again later.</div>
+      `;
+      
+      dialog.querySelector(".hon-modal-close").addEventListener("click", () => {
+        statsModal.remove();
+      });
+    }
+  }
+
   function createMainUI() {
     const itemType = battleType === "performers" ? "performers" : (battleType === "images" ? "images" : "scenes");
     const itemTypeSingular = battleType === "performers" ? "performer" : (battleType === "images" ? "image" : "scene");
@@ -2736,12 +2972,20 @@ async function fetchPerformerCount(performerFilter = {}) {
           </div>
     ` : '';
     
+    // Stats button for performers
+    const statsButtonHTML = battleType === "performers" ? `
+          <button id="hon-stats-btn" class="btn btn-primary hon-stats-button">
+            📊 View All Stats
+          </button>
+    ` : '';
+    
     return `
       <div id="hotornot-container" class="hon-container">
         <div class="hon-header">
           <h1 class="hon-title">🔥 HotOrNot</h1>
           <p class="hon-subtitle">Compare ${itemType} head-to-head to build your rankings</p>
           ${modeToggleHTML}
+          ${statsButtonHTML}
         </div>
 
         <div id="hon-performer-selection" class="hon-performer-selection" style="display: none;">
@@ -3357,6 +3601,14 @@ function addFloatingButton() {
           gauntletFallingItem = null;
         }
         loadNewPair();
+      });
+    }
+
+    // Stats button (performers only)
+    const statsBtn = modal.querySelector("#hon-stats-btn");
+    if (statsBtn) {
+      statsBtn.addEventListener("click", () => {
+        openStatsModal();
       });
     }
 
