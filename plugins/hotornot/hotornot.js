@@ -18,7 +18,8 @@
 
   // GraphQL filter modifier constants
   // Array-based modifiers require value_list field for enum-based criterion inputs
-  // (e.g., GenderCriterionInput). Non-enum filters like StringCriterionInput use 'value' field.
+  // (e.g., GenderCriterionInput uses value_list for INCLUDES/EXCLUDES).
+  // HierarchicalMultiCriterionInput types (tags, studios) always use 'value' field regardless of modifier.
   const ARRAY_BASED_MODIFIERS = new Set(['INCLUDES', 'EXCLUDES', 'INCLUDES_ALL']);
 
   // ============================================
@@ -1659,20 +1660,23 @@ async function fetchPerformerCount(performerFilter = {}) {
     const urlFilter = cachedUrlFilter || {};
     const filter = { ...urlFilter };
     
-    // Apply default filters only if not overridden by URL filters
+    // Apply default filters only when no other filters are selected
+    // Check if urlFilter is empty (no user-applied filters)
+    const hasUserFilters = Object.keys(urlFilter).length > 0;
     
-    // Exclude male performers (unless URL filter specifies a gender)
-    if (!filter.gender) {
+    if (!hasUserFilters) {
+      // Exclude male performers by default
       filter.gender = {
         value_list: ["MALE"],
         modifier: "EXCLUDES"
       };
+      
+      // Exclude performers with missing default image
+      // Use NOT wrapper to invert the is_missing filter
+      filter.NOT = {
+        is_missing: "image"
+      };
     }
-    
-    // Note: Removed the NOT filter for is_missing as it was causing GraphQL 400 errors
-    // The filter structure `NOT: { is_missing: "image" }` is invalid for the Stash GraphQL API
-    // TODO: Consider implementing client-side filtering to exclude performers without images,
-    // or investigate the correct GraphQL filter structure for this use case
     
     return filter;
   }
@@ -1839,12 +1843,6 @@ async function fetchPerformerCount(performerFilter = {}) {
   async function fetchSwissPairPerformers() {
     const performerFilter = getPerformerFilter();
     
-    // For large performer pools (>1000), use sampling for performance
-    // For smaller pools, still get all for accurate ranking
-    const totalPerformers = await fetchPerformerCount(performerFilter);
-    const useSampling = totalPerformers > 1000;
-    const sampleSize = useSampling ? Math.min(500, totalPerformers) : totalPerformers;
-    
     const performersQuery = `
       query FindPerformersByRating($performer_filter: PerformerFilterType, $filter: FindFilterType) {
         findPerformers(performer_filter: $performer_filter, filter: $filter) {
@@ -1855,13 +1853,13 @@ async function fetchPerformerCount(performerFilter = {}) {
       }
     `;
 
-    // Get performers - either all or a random sample
+    // Get all performers for accurate ranking
     const result = await graphqlQuery(performersQuery, {
       performer_filter: performerFilter,
       filter: {
-        per_page: sampleSize,
-        sort: useSampling ? "random" : "rating",
-        direction: useSampling ? undefined : "DESC"
+        per_page: -1,
+        sort: "rating",
+        direction: "DESC"
       }
     });
 
@@ -1948,8 +1946,7 @@ async function fetchPerformerCount(performerFilter = {}) {
 
     return { 
       performers: [performer1, performer2], 
-      // When using sampling, ranks are not meaningful (don't represent true position)
-      ranks: useSampling ? [null, null] : [randomIndex + 1, performer2Index + 1] 
+      ranks: [randomIndex + 1, performer2Index + 1] 
     };
   }
 
