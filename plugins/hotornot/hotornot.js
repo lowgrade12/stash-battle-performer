@@ -2793,7 +2793,17 @@ async function fetchPerformerCount(performerFilter = {}) {
       ratingBuckets[bucketIndex]++;
     });
     
-    const maxCount = Math.max(...ratingBuckets, 1);
+    // Calculate group totals for the 10 rating ranges (0-1, 1-2, ..., 9-10)
+    const groupTotals = [];
+    for (let i = 0; i < 10; i++) {
+      const groupBuckets = ratingBuckets.slice(i * 10, (i + 1) * 10);
+      groupTotals.push(groupBuckets.reduce((sum, count) => sum + count, 0));
+    }
+    
+    // Use group totals for the header bar scaling (shows totals per 10s)
+    const maxGroupTotal = Math.max(...groupTotals, 1);
+    // Use individual bucket max for expanded view scaling
+    const maxBucketCount = Math.max(...ratingBuckets, 1);
     
     // Group buckets into 10 collapsible groups (0.0-1.0, 1.0-2.0, ..., 9.0-10.0)
     const barGraphGroups = [];
@@ -2803,12 +2813,15 @@ async function fetchPerformerCount(performerFilter = {}) {
       
       // Get buckets for this group (10 buckets per group)
       const groupBuckets = ratingBuckets.slice(groupIndex * 10, (groupIndex + 1) * 10);
-      const groupTotal = groupBuckets.reduce((sum, count) => sum + count, 0);
+      const groupTotal = groupTotals[groupIndex];
       
-      // Create individual bars for this group
+      // Calculate percentage for the group header bar (scaled to max group total)
+      const groupPercentage = (groupTotal / maxGroupTotal) * 100;
+      
+      // Create individual bars for this group (scaled to max bucket count for detail view)
       const barsInGroup = groupBuckets.map((count, bucketIndexInGroup) => {
         const bucketIndex = groupIndex * 10 + bucketIndexInGroup;
-        const percentage = (count / maxCount) * 100;
+        const percentage = (count / maxBucketCount) * 100;
         const rangeStart = (bucketIndex / 10).toFixed(1);
         const displayRange = `${rangeStart}`;
         
@@ -2828,8 +2841,12 @@ async function fetchPerformerCount(performerFilter = {}) {
         <div class="hon-bar-group">
           <div class="hon-bar-group-header" data-group="bar-${groupIndex}" role="button" aria-expanded="false" aria-controls="bar-group-${groupIndex}" aria-label="Toggle ratings ${startRating}.0 to ${endRating}.0 group">
             <span class="hon-group-toggle">▶</span>
-            <span class="hon-bar-group-title">Ratings ${startRating}.0-${endRating}.0</span>
-            <span class="hon-bar-group-count">(${groupTotal} performers)</span>
+            <span class="hon-bar-group-label">${startRating}.0-${endRating}.0</span>
+            <div class="hon-bar-group-bar-wrapper">
+              <div class="hon-bar-group-bar" style="width: ${groupPercentage}%">
+                <span class="hon-bar-group-bar-count">${groupTotal}</span>
+              </div>
+            </div>
           </div>
           <div class="hon-bar-group-content collapsed" data-group="bar-${groupIndex}" id="bar-group-${groupIndex}">
             ${barsInGroup}

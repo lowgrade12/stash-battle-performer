@@ -1136,6 +1136,44 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
+.hon-bar-group-label {
+  font-weight: 600;
+  color: #fff;
+  font-size: 0.95rem;
+  min-width: 70px;
+  flex-shrink: 0;
+}
+
+.hon-bar-group-bar-wrapper {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  height: 28px;
+  position: relative;
+  overflow: hidden;
+  min-width: 100px;
+}
+
+.hon-bar-group-bar {
+  background: linear-gradient(90deg, #0d6efd 0%, #0a58ca 100%);
+  height: 100%;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  transition: width 0.3s ease;
+  min-width: 40px;
+}
+
+.hon-bar-group-bar-count {
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Legacy styles for backward compatibility */
 .hon-bar-group-title {
   font-weight: 600;
   color: #fff;
@@ -1328,5 +1366,23 @@
 
   .hon-bar-count {
     font-size: 0.85rem;
+  }
+
+  .hon-bar-group-label {
+    font-size: 0.85rem;
+    min-width: 60px;
+  }
+
+  .hon-bar-group-bar-wrapper {
+    height: 24px;
+    min-width: 80px;
+  }
+
+  .hon-bar-group-bar {
+    min-width: 30px;
+  }
+
+  .hon-bar-group-bar-count {
+    font-size: 0.8rem;
   }
 }
